@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Calendar, Check, Copy, Hash, X } from "lucide-react";
 import { ResultTable } from "@/components/ResultTable";
 import { SummaryCard } from "@/components/SummaryCard";
-import { mergeInputs } from "@/lib/merger";
+import { mergeInputs, type MergedTable } from "@/lib/merger";
 
 type SourceKey = "data" | "nbsa" | "mf" | "rcm";
 
@@ -337,43 +337,108 @@ export function HomePage() {
       </div>
 
       {showResult && merged && submitted && (
+        <ResultModal
+          merged={merged}
+          symbol={symbol}
+          filledCount={filledCount}
+          onClose={handleCloseResult}
+        />
+      )}
+    </div>
+  );
+}
+
+function ResultModal({
+  merged,
+  symbol,
+  filledCount,
+  onClose,
+}: {
+  merged: MergedTable;
+  symbol: string;
+  filledCount: number;
+  onClose: () => void;
+}) {
+  const outerRef = useRef<HTMLDivElement>(null);
+  const innerRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+
+  useLayoutEffect(() => {
+    const inner = innerRef.current;
+    const outer = outerRef.current;
+    if (!inner || !outer) return;
+
+    const recalc = () => {
+      // measure at natural size
+      inner.style.transform = "none";
+      const naturalH = inner.offsetHeight;
+      const naturalW = inner.offsetWidth;
+      const availH = outer.clientHeight;
+      const availW = outer.clientWidth;
+      if (naturalH === 0 || naturalW === 0) return;
+      const s = Math.min(1, availW / naturalW, availH / naturalH);
+      setScale(s);
+    };
+
+    recalc();
+    const ro = new ResizeObserver(recalc);
+    ro.observe(outer);
+    window.addEventListener("resize", recalc);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", recalc);
+    };
+  }, [merged, symbol]);
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6"
+    >
+      <div
+        onClick={onClose}
+        className="absolute inset-0 bg-background/70 backdrop-blur-md animate-in fade-in"
+      />
+
+      <div className="relative w-full h-full max-w-[1500px] max-h-[96vh] flex flex-col rounded-2xl border border-border bg-card shadow-2xl shadow-emerald-500/10 overflow-hidden animate-in zoom-in-95 fade-in duration-200">
+        <div className="flex items-center justify-between gap-4 px-5 md:px-6 py-3 border-b border-border bg-card/95 backdrop-blur z-10">
+          <div className="min-w-0">
+            <h2 className="text-base md:text-lg font-bold text-emerald-400 truncate">
+              Hasil Gabungan {symbol ? `— ${symbol}` : ""}
+            </h2>
+            <p className="text-[11px] text-muted-foreground">
+              Data lengkap hasil penggabungan dari {filledCount} sumber
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="shrink-0 inline-flex items-center justify-center h-9 w-9 rounded-md border border-border bg-background/40 text-muted-foreground hover:text-foreground hover:border-border/80 transition-colors"
+            title="Tutup (Esc)"
+            aria-label="Tutup"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
         <div
-          role="dialog"
-          aria-modal="true"
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-8"
+          ref={outerRef}
+          className="flex-1 overflow-hidden px-4 md:px-5 py-3"
         >
           <div
-            onClick={handleCloseResult}
-            className="absolute inset-0 bg-background/70 backdrop-blur-md animate-in fade-in"
-          />
-
-          <div className="relative w-full max-w-[1400px] max-h-[92vh] flex flex-col rounded-2xl border border-border bg-card shadow-2xl shadow-emerald-500/10 overflow-hidden animate-in zoom-in-95 fade-in duration-200">
-            <div className="flex items-center justify-between gap-4 px-5 md:px-6 py-4 border-b border-border bg-card/95 backdrop-blur sticky top-0 z-10">
-              <div className="min-w-0">
-                <h2 className="text-lg md:text-xl font-bold text-emerald-400 truncate">
-                  Hasil Gabungan {symbol ? `— ${symbol}` : ""}
-                </h2>
-                <p className="text-xs text-muted-foreground">
-                  Data lengkap hasil penggabungan dari {filledCount} sumber
-                </p>
-              </div>
-              <button
-                onClick={handleCloseResult}
-                className="shrink-0 inline-flex items-center justify-center h-9 w-9 rounded-md border border-border bg-background/40 text-muted-foreground hover:text-foreground hover:border-border/80 transition-colors"
-                title="Tutup (Esc)"
-                aria-label="Tutup"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-auto px-5 md:px-6 py-5 space-y-5">
-              <SummaryCard merged={merged} />
-              <ResultTable merged={merged} symbol={symbol} />
-            </div>
+            ref={innerRef}
+            style={{
+              transform: `scale(${scale})`,
+              transformOrigin: "top left",
+              width: "100%",
+            }}
+            className="space-y-3"
+          >
+            <SummaryCard merged={merged} />
+            <ResultTable merged={merged} symbol={symbol} />
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }
