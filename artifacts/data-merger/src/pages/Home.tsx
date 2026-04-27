@@ -374,9 +374,16 @@ function ResultModal({
       void inner.offsetHeight;
       const naturalH = inner.scrollHeight;
       const naturalW = inner.scrollWidth;
-      const availH = outer.clientHeight;
-      const availW = outer.clientWidth;
-      if (naturalH === 0 || naturalW === 0 || availH === 0 || availW === 0)
+      // clientHeight/clientWidth termasuk padding — kurangi padding supaya
+      // dapat content box yang sebenarnya, kalau tidak konten bisa overflow.
+      const cs = getComputedStyle(outer);
+      const padT = parseFloat(cs.paddingTop) || 0;
+      const padB = parseFloat(cs.paddingBottom) || 0;
+      const padL = parseFloat(cs.paddingLeft) || 0;
+      const padR = parseFloat(cs.paddingRight) || 0;
+      const availH = outer.clientHeight - padT - padB;
+      const availW = outer.clientWidth - padL - padR;
+      if (naturalH === 0 || naturalW === 0 || availH <= 0 || availW <= 0)
         return;
       // Beri sedikit margin keamanan (0.5%) supaya tidak ada 1-2 px sisa.
       const s = Math.min(1, (availW / naturalW) * 0.995, (availH / naturalH) * 0.995);
