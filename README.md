@@ -1,1 +1,0 @@
-# Auto Merge Saham
