@@ -406,14 +406,14 @@ function ResultModal({
     <div
       role="dialog"
       aria-modal="true"
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6"
+      className="fixed inset-0 z-50 flex items-center justify-center p-1 md:p-1.5"
     >
       <div
         onClick={onClose}
         className="absolute inset-0 bg-background/70 backdrop-blur-md animate-in fade-in"
       />
 
-      <div className="relative w-full h-full max-w-[1500px] max-h-[96vh] min-h-0 min-w-0 flex flex-col rounded-2xl border border-border bg-card shadow-2xl shadow-emerald-500/10 overflow-hidden animate-in zoom-in-95 fade-in duration-200">
+      <div className="relative w-full h-full min-h-0 min-w-0 flex flex-col rounded-lg border border-border bg-card shadow-2xl shadow-emerald-500/10 overflow-hidden animate-in zoom-in-95 fade-in duration-200">
         <div className="shrink-0 flex items-center justify-between gap-4 px-5 md:px-6 py-3 border-b border-border bg-card/95 backdrop-blur z-10">
           <div className="min-w-0">
             <h2 className="text-base md:text-lg font-bold text-emerald-400 truncate">
