@@ -40,7 +40,7 @@ const SOURCES: { key: SourceKey; label: string; tag: string; cmdBase: string; hi
 const SAMPLE: Record<SourceKey, string> = {
   data: `/DATA 🗓24-04-2026 || ⏰09:00:00 Wib.
 Halo Kak Bang Tra🥰,
-Berikut adalah Data saham AMAR (6 candle) :
+Berikut adalah Data saham ESIP (6 candle) :
 --------------------------------------------------
 🗓 Date  |Price| Gain|Freq | MF +/- | Value| NBSA|
 --------------------------------------------------
@@ -55,7 +55,7 @@ TOTAL✍️ :              21Rb    -6M 🔴  23M  +183Jt`,
   nbsa: `/ACCUMNBSA 🗓24-04-2026 || ⏰09:00:00 Wib.
 Halo Kak Bang Tra🥰,
 Berikut adalah Data Acc/Dist NBSA
-saham AMAR (6 candle) :
+saham ESIP (6 candle) :
 ----------------------------------------
 🗓 Date  |Price| Value |NBSA| ket...   |
 ----------------------------------------
@@ -70,7 +70,7 @@ TOTAL✍️ :        23M  +183Jt  Netral`,
   mf: `/ACUUMMF 🗓24-04-2026 || ⏰09:00:00 Wib.
 Halo Kak Bang Tra🥰,
 Berikut adalah Data
-Acc/Dist Money Flow saham AMAR (6 candle) :
+Acc/Dist Money Flow saham ESIP (6 candle) :
 ------------------------------------------
 🗓 Date  |Price| Value |MF+/-| ket..     |
 ------------------------------------------
@@ -84,7 +84,7 @@ Acc/Dist Money Flow saham AMAR (6 candle) :
 TOTAL✍️ :        23M    -6M   Netral`,
   rcm: `/RCM 🗓24-04-2026 || ⏰09:00:00 Wib.
 Halo Kak Bang Tra🥰,
-Berikut adalah Rekap Clean Money Saham AMAR (6 Hari)
+Berikut adalah Rekap Clean Money Saham ESIP (6 Hari)
 dari tanggal 17-4-2026 s/d 24-4-2026
 -------------------------------------------------------------------------
    Date   | Tx|Avp P| Gain%| Value |Smart M.|  Bad M. | Clean M.|🚦| RCV
@@ -133,7 +133,7 @@ export function HomePage() {
 
   const handleSample = () => {
     setData(SAMPLE);
-    setSymbol("AMAR");
+    setSymbol("ESIP");
     setSubmitted(SAMPLE);
     setShowResult(true);
   };
