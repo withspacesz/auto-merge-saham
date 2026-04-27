@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { Calendar, Check, Copy, Hash } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Calendar, Check, Copy, Hash, X } from "lucide-react";
 import { ResultTable } from "@/components/ResultTable";
 import { SummaryCard } from "@/components/SummaryCard";
 import { mergeInputs } from "@/lib/merger";
@@ -119,24 +119,45 @@ export function HomePage() {
     rcm: "",
   });
   const [submitted, setSubmitted] = useState<Record<SourceKey, string> | null>(null);
+  const [showResult, setShowResult] = useState(false);
 
   const filledCount = (Object.values(data) as string[]).filter((v) => v.trim().length > 0).length;
 
   const handleMerge = () => {
     setSubmitted({ ...data });
+    setShowResult(true);
   };
 
   const handleReset = () => {
     setData({ data: "", nbsa: "", mf: "", rcm: "" });
     setSubmitted(null);
     setSymbol("");
+    setShowResult(false);
   };
 
   const handleSample = () => {
     setData(SAMPLE);
     setSymbol("CTTH");
     setSubmitted(SAMPLE);
+    setShowResult(true);
   };
+
+  const handleCloseResult = () => {
+    setShowResult(false);
+  };
+
+  useEffect(() => {
+    if (!showResult) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setShowResult(false);
+    };
+    window.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = "";
+    };
+  }, [showResult]);
 
   const { merged } = useMemo(() => {
     if (!submitted) return { merged: null };
@@ -313,13 +334,46 @@ export function HomePage() {
           </div>
         </div>
 
-        {merged && submitted && (
-          <>
-            <SummaryCard merged={merged} />
-            <ResultTable merged={merged} symbol={symbol} />
-          </>
-        )}
       </div>
+
+      {showResult && merged && submitted && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-8"
+        >
+          <div
+            onClick={handleCloseResult}
+            className="absolute inset-0 bg-background/70 backdrop-blur-md animate-in fade-in"
+          />
+
+          <div className="relative w-full max-w-[1400px] max-h-[92vh] flex flex-col rounded-2xl border border-border bg-card shadow-2xl shadow-emerald-500/10 overflow-hidden animate-in zoom-in-95 fade-in duration-200">
+            <div className="flex items-center justify-between gap-4 px-5 md:px-6 py-4 border-b border-border bg-card/95 backdrop-blur sticky top-0 z-10">
+              <div className="min-w-0">
+                <h2 className="text-lg md:text-xl font-bold text-emerald-400 truncate">
+                  Hasil Gabungan {symbol ? `— ${symbol}` : ""}
+                </h2>
+                <p className="text-xs text-muted-foreground">
+                  Data lengkap hasil penggabungan dari {filledCount} sumber
+                </p>
+              </div>
+              <button
+                onClick={handleCloseResult}
+                className="shrink-0 inline-flex items-center justify-center h-9 w-9 rounded-md border border-border bg-background/40 text-muted-foreground hover:text-foreground hover:border-border/80 transition-colors"
+                title="Tutup (Esc)"
+                aria-label="Tutup"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-auto px-5 md:px-6 py-5 space-y-5">
+              <SummaryCard merged={merged} />
+              <ResultTable merged={merged} symbol={symbol} />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
