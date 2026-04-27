@@ -38,69 +38,65 @@ const SOURCES: { key: SourceKey; label: string; tag: string; cmdBase: string; hi
 ];
 
 const SAMPLE: Record<SourceKey, string> = {
-  data: `/DATA 🗓27-04-2026 || ⏰01:23:13 Wib.
+  data: `/DATA 🗓24-04-2026 || ⏰09:00:00 Wib.
 Halo Kak Bang Tra🥰,
-Berikut adalah Data saham ACES (7 candle) :
+Berikut adalah Data saham AMAR (6 candle) :
 --------------------------------------------------
 🗓 Date  |Price| Gain|Freq | MF +/- | Value| NBSA|
 --------------------------------------------------
-24-04-2026   390 -1.52   4Rb   -3M 🔴  12M    +2M
-23-04-2026   396  0.51   7Rb   -4M 🔴  23M    +6M
-22-04-2026   394  2.07   7Rb   -2M 🔴  18M    +5M
-21-04-2026   386  3.76   5Rb   +2M 🟢  16M   +10M
-20-04-2026   372 -1.06   5Rb   -4M 🔴  14M    +2M
-17-04-2026   376  2.73   9Rb   +2M 🟢  29M    +2M
-16-04-2026   366  2.23   4Rb   +1M 🟢  14M    +6M
+24-04-2026    88 -4.35   2Rb   -821Jt 🔴   2M  +188Jt
+23-04-2026    92 -3.16   2Rb   -938Jt 🔴   2M  -189Jt
+22-04-2026    95  1.06   3Rb   +336Jt 🟢   3M   -52Jt
+21-04-2026    94  1.08   3Rb    -16Jt 🔴   4M  +172Jt
+20-04-2026    93  0.00   5Rb   -637Jt 🔴   4M  -252Jt
+17-04-2026    93 -8.82   6Rb     -4M 🔴   8M  +316Jt
 --------------------------------------------------➕
-TOTAL✍️ :               41Rb   -7M 🔴 126M   +33M`,
-  nbsa: `/ACCUMNBSA 🗓27-04-2026 || ⏰01:22:52 Wib.
+TOTAL✍️ :              21Rb    -6M 🔴  23M  +183Jt`,
+  nbsa: `/ACCUMNBSA 🗓24-04-2026 || ⏰09:00:00 Wib.
 Halo Kak Bang Tra🥰,
 Berikut adalah Data Acc/Dist NBSA
-saham ACES (7 candle) :
+saham AMAR (6 candle) :
 ----------------------------------------
 🗓 Date  |Price| Value |NBSA| ket...   |
 ----------------------------------------
-24-04-2026   390  12M    +2M  Normal Accum
-23-04-2026   396  23M    +6M  Big Accum🔥
-22-04-2026   394  18M    +5M  Big Accum🔥
-21-04-2026   386  16M   +10M  Big Accum🔥
-20-04-2026   372  14M    +2M  Small Accum
-17-04-2026   376  29M    +2M  Netral
-16-04-2026   366  14M    +6M  Big Accum🔥
+24-04-2026    88   2M  +188Jt  Small Accum
+23-04-2026    92   2M  -189Jt  Small Dist
+22-04-2026    95   3M   -52Jt  Netral
+21-04-2026    94   4M  +172Jt  Netral
+20-04-2026    93   4M  -252Jt  Netral
+17-04-2026    93   8M  +316Jt  Netral
 -----------------------------------------➕
-TOTAL✍️ :        126M   +33M  Big Accum🔥`,
-  mf: `/ACUUMMF 🗓27-04-2026 || ⏰01:23:07 Wib.
+TOTAL✍️ :        23M  +183Jt  Netral`,
+  mf: `/ACUUMMF 🗓24-04-2026 || ⏰09:00:00 Wib.
 Halo Kak Bang Tra🥰,
 Berikut adalah Data
-Acc/Dist Money Flow saham ACES (7 candle) :
+Acc/Dist Money Flow saham AMAR (6 candle) :
 ------------------------------------------
 🗓 Date  |Price| Value |MF+/-| ket..     |
 ------------------------------------------
-24-04-2026   390  12M    -3M  Big Dist‼️
-23-04-2026   396  23M    -4M  Normal Dist
-22-04-2026   394  18M    -2M  Small Dist
-21-04-2026   386  16M    +2M  Small Accum
-20-04-2026   372  14M    -4M  Big Dist‼️
-17-04-2026   376  29M    +2M  Small Accum
-16-04-2026   366  14M    +1M  Small Accum
+24-04-2026    88   2M  -821Jt  Massive Dist
+23-04-2026    92   2M  -938Jt  Massive Dist
+22-04-2026    95   3M  +336Jt  Small Accum
+21-04-2026    94   4M   -16Jt  Netral
+20-04-2026    93   4M  -637Jt  Normal Dist
+17-04-2026    93   8M    -4M   Massive Dist
 -----------------------------------------➕
-TOTAL✍️ :        126M    -7M  Netral`,
-  rcm: `/RCM 🗓27-04-2026 || ⏰01:23:41 Wib.
+TOTAL✍️ :        23M    -6M   Netral`,
+  rcm: `/RCM 🗓24-04-2026 || ⏰09:00:00 Wib.
 Halo Kak Bang Tra🥰,
-Berikut adalah Rekap Clean Money Saham ACES (7 Hari)
-dari tanggal 16-4-2026 s/d 24-4-2026
+Berikut adalah Rekap Clean Money Saham AMAR (6 Hari)
+dari tanggal 17-4-2026 s/d 24-4-2026
 -------------------------------------------------------------------------
    Date   | Tx|Avp P| Gain%| Value |Smart M.|  Bad M. | Clean M.|🚦| RCV
 -------------------------------------------------------------------------
-24-04-2026 11x   384  -1.52   3.07M  649.56Jt   -1.53M  -878.31Jt🔴  -28
-23-04-2026 14x   396   0.51   8.68M    2.71M    -5.09M    -2.38M 🔴  -27
-22-04-2026 12x   392   2.07   8.68M    3.40M    -3.30M   102.54Jt🟢    1
-21-04-2026 24x   381   3.76   8.46M    4.65M    -3.04M     1.61M 🟢   18
-20-04-2026 25x   375  -1.06   7.10M    1.95M    -4.55M    -2.60M 🔴  -36
-17-04-2026 14x   379   2.73   9.28M    4.81M    -3.25M     1.56M 🟢   16
-16-04-2026 13x   364   2.23   5.02M    3.58M  -800.39Jt    2.78M 🟢   55
+24-04-2026  3x    90  -4.35   2.00M    0.00   -208.67Jt  -208.67Jt🔴  -98
+23-04-2026  2x    92  -3.16   2.00M    0.00   -227.95Jt  -227.95Jt🔴  -99
+22-04-2026 10x    95   1.06   3.00M  672.67Jt -317.45Jt   355.22Jt🟢   33
+21-04-2026  4x    91   1.08   4.00M  327.53Jt -267.83Jt    59.71Jt🟢   10
+20-04-2026  6x    95   0.00   4.00M  234.90Jt -415.25Jt  -180.35Jt🔴  -22
+17-04-2026 15x    96  -8.82   8.00M   96.45Jt   -2.65M     -2.55M 🔴  -88
 -------------------------------------------------------------------------➕
-          113x   382  -1.52  50.29M   21.77M   -21.56M   200.57Jt🟢    0`,
+           40x    93  -2.20  23.00M    1.33M    -4.09M    -2.76M 🔴  -264`,
 };
 
 type Mode = "candle" | "tanggal";
@@ -137,7 +133,7 @@ export function HomePage() {
 
   const handleSample = () => {
     setData(SAMPLE);
-    setSymbol("CTTH");
+    setSymbol("AMAR");
     setSubmitted(SAMPLE);
     setShowResult(true);
   };
@@ -368,23 +364,39 @@ function ResultModal({
     const outer = outerRef.current;
     if (!inner || !outer) return;
 
+    let raf1 = 0;
+    let raf2 = 0;
+
     const recalc = () => {
-      // measure at natural size
+      // Reset transform supaya pengukuran benar di ukuran alami.
       inner.style.transform = "none";
-      const naturalH = inner.offsetHeight;
-      const naturalW = inner.offsetWidth;
+      // Force reflow agar offsetHeight memperhitungkan perubahan transform.
+      void inner.offsetHeight;
+      const naturalH = inner.scrollHeight;
+      const naturalW = inner.scrollWidth;
       const availH = outer.clientHeight;
       const availW = outer.clientWidth;
-      if (naturalH === 0 || naturalW === 0) return;
-      const s = Math.min(1, availW / naturalW, availH / naturalH);
+      if (naturalH === 0 || naturalW === 0 || availH === 0 || availW === 0)
+        return;
+      // Beri sedikit margin keamanan (0.5%) supaya tidak ada 1-2 px sisa.
+      const s = Math.min(1, (availW / naturalW) * 0.995, (availH / naturalH) * 0.995);
       setScale(s);
     };
 
-    recalc();
-    const ro = new ResizeObserver(recalc);
+    // Dua RAF supaya layout sudah benar-benar settle (font, gambar, dll).
+    raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(recalc);
+    });
+
+    const ro = new ResizeObserver(() => {
+      recalc();
+    });
     ro.observe(outer);
+    ro.observe(inner);
     window.addEventListener("resize", recalc);
     return () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
       ro.disconnect();
       window.removeEventListener("resize", recalc);
     };
@@ -401,8 +413,8 @@ function ResultModal({
         className="absolute inset-0 bg-background/70 backdrop-blur-md animate-in fade-in"
       />
 
-      <div className="relative w-full h-full max-w-[1500px] max-h-[96vh] flex flex-col rounded-2xl border border-border bg-card shadow-2xl shadow-emerald-500/10 overflow-hidden animate-in zoom-in-95 fade-in duration-200">
-        <div className="flex items-center justify-between gap-4 px-5 md:px-6 py-3 border-b border-border bg-card/95 backdrop-blur z-10">
+      <div className="relative w-full h-full max-w-[1500px] max-h-[96vh] min-h-0 min-w-0 flex flex-col rounded-2xl border border-border bg-card shadow-2xl shadow-emerald-500/10 overflow-hidden animate-in zoom-in-95 fade-in duration-200">
+        <div className="shrink-0 flex items-center justify-between gap-4 px-5 md:px-6 py-3 border-b border-border bg-card/95 backdrop-blur z-10">
           <div className="min-w-0">
             <h2 className="text-base md:text-lg font-bold text-emerald-400 truncate">
               Hasil Gabungan {symbol ? `— ${symbol}` : ""}
@@ -423,7 +435,7 @@ function ResultModal({
 
         <div
           ref={outerRef}
-          className="flex-1 overflow-hidden px-4 md:px-5 py-3"
+          className="flex-1 min-h-0 min-w-0 overflow-hidden px-4 md:px-5 py-3"
         >
           <div
             ref={innerRef}
@@ -431,6 +443,7 @@ function ResultModal({
               transform: `scale(${scale})`,
               transformOrigin: "top left",
               width: "100%",
+              willChange: "transform",
             }}
             className="space-y-3"
           >
