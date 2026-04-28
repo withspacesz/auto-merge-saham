@@ -65,101 +65,101 @@ const SOURCES: { key: SourceKey; label: string; tag: string; cmdBase: string; hi
 ];
 
 const SAMPLE: Record<SourceKey, string> = {
-  data: `/DATA 🗓24-04-2026 || ⏰09:00:00 Wib.
+  data: `/DATA 🗓28-04-2026 || ⏰09:00:00 Wib.
 Halo Kak Bang Tra🥰,
-Berikut adalah Data saham ESIP (6 candle) :
+Berikut adalah Data saham ELSA (6 candle) :
 --------------------------------------------------
 🗓 Date  |Price| Gain|Freq | MF +/- | Value| NBSA|
 --------------------------------------------------
-24-04-2026    88 -4.35   2Rb   -821Jt 🔴   2M  +188Jt
-23-04-2026    92 -3.16   2Rb   -938Jt 🔴   2M  -189Jt
-22-04-2026    95  1.06   3Rb   +336Jt 🟢   3M   -52Jt
-21-04-2026    94  1.08   3Rb    -16Jt 🔴   4M  +172Jt
-20-04-2026    93  0.00   5Rb   -637Jt 🔴   4M  -252Jt
-17-04-2026    93 -8.82   6Rb     -4M 🔴   8M  +316Jt
+27-04-2026   780  0.00   8Rb     -8M 🔴  35M   +4M
+24-04-2026   780 -3.11  21Rb    -35M 🔴 111M  -19M
+23-04-2026   805 10.27  27Rb    +30M 🟢 175M  +12M
+22-04-2026   730  1.39   5Rb     -1M 🔴  21M   +7M
+21-04-2026   720 -0.69   4Rb     -6M 🔴  14M   -1M
+20-04-2026   725  0.00   8Rb     -4M 🔴  34M   -7M
 --------------------------------------------------➕
-TOTAL✍️ :              21Rb    -6M 🔴  23M  +183Jt`,
-  nbsa: `/ACCUMNBSA 🗓24-04-2026 || ⏰09:00:00 Wib.
+TOTAL✍️ :              93Rb    -16M 🔴 514M   -5M`,
+  nbsa: `/ACCUMNBSA 🗓28-04-2026 || ⏰09:00:00 Wib.
 Halo Kak Bang Tra🥰,
 Berikut adalah Data Acc/Dist NBSA
-saham ESIP (6 candle) :
+saham ELSA (6 candle) :
 ----------------------------------------
 🗓 Date  |Price| Value |NBSA| ket...   |
 ----------------------------------------
-24-04-2026    88   2M  +188Jt  Small Accum
-23-04-2026    92   2M  -189Jt  Small Dist
-22-04-2026    95   3M   -52Jt  Netral
-21-04-2026    94   4M  +172Jt  Netral
-20-04-2026    93   4M  -252Jt  Netral
-17-04-2026    93   8M  +316Jt  Netral
+27-04-2026   780  35M   +4M   Small Accum
+24-04-2026   780 111M  -19M   Normal Dist
+23-04-2026   805 175M  +12M   Small Accum
+22-04-2026   730  21M   +7M   Big Accum🔥
+21-04-2026   720  14M   -1M   Small Dist
+20-04-2026   725  34M   -7M   Normal Dist
 -----------------------------------------➕
-TOTAL✍️ :        23M  +183Jt  Netral`,
-  mf: `/ACUUMMF 🗓24-04-2026 || ⏰09:00:00 Wib.
+TOTAL✍️ :       514M   -5M   Netral`,
+  mf: `/ACUUMMF 🗓28-04-2026 || ⏰09:00:00 Wib.
 Halo Kak Bang Tra🥰,
 Berikut adalah Data
-Acc/Dist Money Flow saham ESIP (6 candle) :
+Acc/Dist Money Flow saham ELSA (6 candle) :
 ------------------------------------------
 🗓 Date  |Price| Value |MF+/-| ket..     |
 ------------------------------------------
-24-04-2026    88   2M  -821Jt  Massive Dist
-23-04-2026    92   2M  -938Jt  Massive Dist
-22-04-2026    95   3M  +336Jt  Small Accum
-21-04-2026    94   4M   -16Jt  Netral
-20-04-2026    93   4M  -637Jt  Normal Dist
-17-04-2026    93   8M    -4M   Massive Dist
+27-04-2026   780  35M   -8M   Big Dist‼️
+24-04-2026   780 111M  -35M   Big Dist‼️
+23-04-2026   805 175M  +30M   Normal Accum
+22-04-2026   730  21M   -1M   Netral
+21-04-2026   720  14M   -6M   Massive Dist
+20-04-2026   725  34M   -4M   Small Dist
 -----------------------------------------➕
-TOTAL✍️ :        23M    -6M   Netral`,
-  rcm: `/RCM 🗓24-04-2026 || ⏰09:00:00 Wib.
+TOTAL✍️ :       514M  -16M   Netral`,
+  rcm: `/RCM 🗓28-04-2026 || ⏰09:00:00 Wib.
 Halo Kak Bang Tra🥰,
-Berikut adalah Rekap Clean Money Saham ESIP (6 Hari)
-dari tanggal 17-4-2026 s/d 24-4-2026
+Berikut adalah Rekap Clean Money Saham ELSA (6 Hari)
+dari tanggal 20-4-2026 s/d 27-4-2026
 -------------------------------------------------------------------------
    Date   | Tx|Avp P| Gain%| Value |Smart M.|  Bad M. | Clean M.|🚦| RCV
 -------------------------------------------------------------------------
-24-04-2026  3x    90  -4.35   2.00M    0.00   -208.67Jt  -208.67Jt🔴  -98
-23-04-2026  2x    92  -3.16   2.00M    0.00   -227.95Jt  -227.95Jt🔴  -99
-22-04-2026 10x    95   1.06   3.00M  672.67Jt -317.45Jt   355.22Jt🟢   33
-21-04-2026  4x    91   1.08   4.00M  327.53Jt -267.83Jt    59.71Jt🟢   10
-20-04-2026  6x    95   0.00   4.00M  234.90Jt -415.25Jt  -180.35Jt🔴  -22
-17-04-2026 15x    96  -8.82   8.00M   96.45Jt   -2.65M     -2.55M 🔴  -88
+27-04-2026 13x   767   0.00   35.00M   4.64M    -4.29M   355.23Jt🟢    3
+24-04-2026 12x   776  -3.11  111.00M   2.84M   -12.45M    -9.61M🔴  -56
+23-04-2026 39x   777  10.27  175.00M  40.59M   -13.82M    26.77M🟢   33
+22-04-2026  6x   737   1.39   21.00M   4.62M    -1.38M     3.24M🟢   50
+21-04-2026 15x   717  -0.69   14.00M 873.41Jt   -3.94M    -3.07M🔴  -59
+20-04-2026  8x   731   0.00   34.00M 655.25Jt   -6.60M    -5.95M🔴  -79
 -------------------------------------------------------------------------➕
-           40x    93  -2.20  23.00M    1.33M    -4.09M    -2.76M 🔴  -264`,
-  broker: `/BROKSUM 🗓28-04-2026 || ⏰11:33:15 Wib. ®️@chart_saham_bot
+          116x   782   5.77  514.00M  80.99M   -54.68M    26.31M🟢   15`,
+  broker: `/BROKSUM 🗓28-04-2026 || ⏰13:06:52 Wib. ®️@chart_saham_bot
 Halo Kak Bang Tra🥰, Berikut adalah Data
-          Broker Summary ESIP  Regular Board (RG)
-            Tanggal 2026-04-24 s.d 2026-04-27
+          Broker Summary ELSA  Regular Board (RG)
+            Tanggal 2026-04-27 s.d 2026-04-27
 -----------------------------------------------------------------------
    🟩🟩🟩🟩 NET BUY 🟩🟩🟩🟩      🟥🟥🟥🟥 NET SELL 🟥🟥🟥🟥
  No|KODE|B.Val| B.Lot| B.Fq| B.Avg| No|KODE| S.Val| S.Lot| S.fq| S.Avg|
 -----------------------------------------------------------------------
- 1. MG   2.6M  225.2rb   2rb   114   1. CC  -1.7M  -152.6rb   3rb   109
- 2. AK   1.8M  160.6rb   1rb   109   2. KK -938.0Jt -83.0rb   1rb   108
- 3. XA 460.0Jt  45.3rb 568     112   3. XC -790.0Jt -75.1rb   2rb   110
- 4. OD 400.8Jt  36.5rb 554     109   4. XL -612.5Jt -60.6rb  23rb   110
- 5. CP 389.7Jt  36.4rb   2rb   112   5. GR -507.2Jt -43.8rb 199     110
- 6. BK 145.9Jt  13.9rb 106     105   6. NI -334.1Jt -28.6rb 537     111
- 7. DR  70.3Jt   5.3rb 128     113   7. BQ -196.1Jt -16.5rb   1rb   110
- 8. YU  55.6Jt   4.8rb 168     116   8. LG -148.0Jt -13.8rb 113     107
- 9. YP  39.2Jt  13.2rb   6rb   111   9. DH -129.5Jt -11.8rb  96     107
-10. EP  21.4Jt   1.5rb 631     111  10. DX -120.9Jt -10.6rb  36     114`,
-  brokerPrev: `/BROKSUM 🗓28-04-2026 || ⏰11:32:55 Wib. ®️@chart_saham_bot
+ 1. AI   5.8M   74.9rb 541     771   1. AK  -1.7M  -21.3rb 876     769
+ 2. HP 732.5Jt   9.6rb 113     765   2. XL  -1.5M  -19.8rb   3rb   763
+ 3. PD 720.9Jt   9.5rb 413     760   3. XC  -1.4M  -17.8rb 709     762
+ 4. DH 488.2Jt   6.5rb  75     757   4. NI  -1.2M  -15.2rb 215     771
+ 5. KK 421.9Jt   5.4rb 186     771   5. ZP -966.7Jt -12.6rb  75     767
+ 6. OD 335.1Jt   4.4rb 338     764   6. SQ -906.0Jt -11.6rb 239     773
+ 7. LG 246.1Jt   3.2rb  78     764   7. GR -589.4Jt  -7.7rb 166     762
+ 8. CP 244.0Jt   3.2rb 151     763   8. CC -487.6Jt  -6.2rb 486     767
+ 9. MG 131.4Jt   1.7rb  20     758   9. BK -417.7Jt  -5.4rb  39     773
+10. DX  88.3Jt   1.2rb  14     755  10. YB -396.5Jt  -5.1rb  90     769`,
+  brokerPrev: `/BROKSUM 🗓28-04-2026 || ⏰14:22:01 Wib. ®️@chart_saham_bot
 Halo Kak Bang Tra🥰, Berikut adalah Data
-          Broker Summary ESIP  Regular Board (RG)
-            Tanggal 2026-04-24 s.d 2026-04-24
+          Broker Summary ELSA  Regular Board (RG)
+            Tanggal 2026-04-20 s.d 2026-04-27
 -----------------------------------------------------------------------
    🟩🟩🟩🟩 NET BUY 🟩🟩🟩🟩      🟥🟥🟥🟥 NET SELL 🟥🟥🟥🟥
  No|KODE|B.Val| B.Lot| B.Fq| B.Avg| No|KODE| S.Val| S.Lot| S.fq| S.Avg|
 -----------------------------------------------------------------------
- 1. KK 211.5Jt  23.9rb 137      89   1. XL -236.7Jt -26.8rb   1rb    89
- 2. GR 132.4Jt  14.9rb  32      89   2. MG -49.5Jt  -5.6rb  24      88
- 3. BK  43.9Jt   4.9rb  35      89   3. SQ -45.4Jt  -5.1rb 101      88
- 4. YB  22.6Jt   2.7rb  28      88   4. YP -38.1Jt  -4.3rb  63      89
- 5. NI  19.7Jt   2.2rb  22      89   5. CC -35.6Jt  -3.9rb 143      89
- 6. AK  18.6Jt   2.2rb  26      89   6. CP -19.8Jt  -2.2rb  13      90
- 7. OD   5.9Jt 668.0    28      89   7. XC -17.9Jt  -2.0rb 105      89
- 8. ZP   4.4Jt 499.0     1      88   8. PD -10.4Jt  -1.3rb  71      88
- 9. BQ   4.3Jt 485.0     7      89   9. XA  -8.9Jt  -1.0rb   3      89
-10. AZ   2.7Jt 305.0     4      87  10. EP  -7.3Jt -826.0     5      88`,
+ 1. LG  13.2M  168.5rb   1rb   782   1. GR -18.6M  -235.4rb   2rb   782
+ 2. CC   9.6M  122.1rb   9rb   774   2. XL  -5.7M  -76.5rb  24rb   769
+ 3. PD   7.5M   93.2rb   4rb   776   3. YP  -5.1M  -66.8rb   6rb   769
+ 4. XC   6.2M   78.4rb   5rb   777   4. NI  -4.2M  -54.7rb   2rb   766
+ 5. AI   4.9M   64.1rb 607     771   5. SQ  -4.1M  -52.2rb   1rb   771
+ 6. RX   3.2M   45.0rb 334     718   6. AK  -3.5M  -37.7rb   7rb   774
+ 7. DR   2.9M   37.3rb   1rb   778   7. KK  -3.0M  -38.4rb   1rb   775
+ 8. YU   1.8M   21.1rb 538     784   8. YB  -1.5M  -19.2rb 851     773
+ 9. DH 894.3Jt  11.8rb 300     765   9. ZP  -1.4M  -18.4rb   1rb   770
+10. BK 854.9Jt  10.7rb 438     773  10. TP  -1.2M  -16.7rb 496     752`,
 };
 
 type Mode = "candle" | "tanggal";
@@ -648,7 +648,7 @@ function ResultModal({
                   <div className="space-y-4">
                     {brokerConsistency && (
                       <ErrorBoundary label="Konsistensi Broker">
-                        <BrokerConsistencyCard analysis={brokerConsistency} />
+                        <BrokerConsistencyCard analysis={brokerConsistency} merged={merged} />
                       </ErrorBoundary>
                     )}
                     <ErrorBoundary label="Rekomendasi">
