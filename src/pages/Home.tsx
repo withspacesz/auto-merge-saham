@@ -646,20 +646,22 @@ function ResultModal({
                 )}
                 {tab === "rekomendasi" && merged && (
                   <div className="space-y-4">
-                    {brokerConsistency && (
-                      <ErrorBoundary label="Konsistensi Broker">
-                        <BrokerConsistencyCard analysis={brokerConsistency} merged={merged} />
-                      </ErrorBoundary>
-                    )}
                     <ErrorBoundary label="Rekomendasi">
                       <SummaryCard merged={merged} brokerAnalysis={brokerAnalysis} />
                     </ErrorBoundary>
                   </div>
                 )}
                 {tab === "top-broker" && brokerAnalysis && (
-                  <ErrorBoundary label="Semua Broker">
-                    <TopBrokerCard analysis={brokerAnalysis} />
-                  </ErrorBoundary>
+                  <div className="space-y-3">
+                    {brokerConsistency && (
+                      <ErrorBoundary label="Konsistensi Broker">
+                        <BrokerConsistencyCard analysis={brokerConsistency} merged={merged} />
+                      </ErrorBoundary>
+                    )}
+                    <ErrorBoundary label="Semua Broker">
+                      <TopBrokerCard analysis={brokerAnalysis} />
+                    </ErrorBoundary>
+                  </div>
                 )}
               </div>
             )}

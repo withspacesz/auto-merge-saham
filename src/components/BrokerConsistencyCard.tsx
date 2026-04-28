@@ -330,49 +330,57 @@ export function BrokerConsistencyCard({
   const stoppedDist = analysis.stoppedDist.slice(0, 5);
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 md:p-5 space-y-5">
-      {/* Header */}
-      <div className="space-y-1">
-        <div className="flex items-center gap-2 flex-wrap">
-          <h3 className="text-sm md:text-base font-bold tracking-wider uppercase text-amber-300">
+    <div className="rounded-xl border border-border bg-card overflow-hidden">
+      {/* Header — gaya senada dengan TopBrokerCard */}
+      <div className="flex items-center justify-between gap-3 px-4 py-2 border-b border-border bg-gradient-to-r from-amber-500/5 to-transparent">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="text-amber-400">🏆</span>
+          <h3 className="text-sm font-semibold text-amber-300 tracking-wide truncate">
             Kandidat Terkuat yang Akumulasi {symbol}
           </h3>
         </div>
-        <div className="text-[10px] text-slate-400">
-          Mingguan ({analysis.weeklyRangeDays} hari, {analysis.weekly.dateStart ? `${analysis.weekly.dateStart} → ` : ""}{analysis.weekly.date}) vs harian {analysis.daily.date}
-        </div>
+        <span className="text-[11px] text-muted-foreground whitespace-nowrap">
+          Mingguan {analysis.weeklyRangeDays}h
+          {analysis.weekly.dateStart ? ` (${analysis.weekly.dateStart} → ${analysis.weekly.date})` : ` (${analysis.weekly.date})`}
+          {" • "}
+          Harian {analysis.daily.date}
+        </span>
       </div>
 
-      {/* Candidates */}
-      {candidates.length === 0 ? (
-        <div className="text-xs text-slate-400 italic">Belum ada kandidat akumulasi yang terdeteksi.</div>
-      ) : (
-        <div className="space-y-2">
-          {candidates.map((c) => <CandidateRow key={c.entry.code} c={c} />)}
-        </div>
-      )}
+      <div className="p-3 space-y-3">
+        {/* Candidates */}
+        {candidates.length === 0 ? (
+          <div className="text-xs text-muted-foreground italic px-1 py-2">
+            Belum ada kandidat akumulasi yang terdeteksi.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            {candidates.map((c) => <CandidateRow key={c.entry.code} c={c} />)}
+          </div>
+        )}
 
-      {/* Distribusi ringkas */}
-      {(topDist.length > 0 || stoppedDist.length > 0) && (
-        <div className="pt-3 border-t border-white/5 space-y-2">
-          {topDist.length > 0 && (
-            <div className="text-[12px]">
-              <span className="font-bold text-rose-300 uppercase tracking-wider text-[10px]">🟥 Jualan konsisten:</span>{" "}
-              <span className="text-slate-200 font-mono">
-                {topDist.map((e) => `${e.code} ${fmtIDR(e.weeklyValue)}`).join(", ")}
-              </span>
-            </div>
-          )}
-          {stoppedDist.length > 0 && (
-            <div className="text-[12px]">
-              <span className="font-bold text-amber-300 uppercase tracking-wider text-[10px]">📉 Jualan melemah:</span>{" "}
-              <span className="text-slate-200 font-mono">
-                {stoppedDist.map((e) => `${e.code} ${fmtIDR(e.weeklyValue)}`).join(", ")}
-              </span>
-            </div>
-          )}
-        </div>
-      )}
+        {/* Distribusi ringkas */}
+        {(topDist.length > 0 || stoppedDist.length > 0) && (
+          <div className="pt-3 border-t border-border/60 space-y-1.5">
+            {topDist.length > 0 && (
+              <div className="text-[12px]">
+                <span className="font-bold text-rose-300 uppercase tracking-wider text-[10px]">🟥 Jualan konsisten:</span>{" "}
+                <span className="text-foreground/90 font-mono">
+                  {topDist.map((e) => `${e.code} ${fmtIDR(e.weeklyValue)}`).join(", ")}
+                </span>
+              </div>
+            )}
+            {stoppedDist.length > 0 && (
+              <div className="text-[12px]">
+                <span className="font-bold text-amber-300 uppercase tracking-wider text-[10px]">📉 Jualan melemah:</span>{" "}
+                <span className="text-foreground/90 font-mono">
+                  {stoppedDist.map((e) => `${e.code} ${fmtIDR(e.weeklyValue)}`).join(", ")}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
