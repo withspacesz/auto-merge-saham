@@ -4,14 +4,18 @@ import { ResultTable } from "@/components/ResultTable";
 import { SummaryCard } from "@/components/SummaryCard";
 import { TopBrokerCard } from "@/components/TopBrokerCard";
 import { BrokerCompareCard } from "@/components/BrokerCompareCard";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { mergeInputs, type MergedTable } from "@/lib/merger";
 import {
   parseBrokerActivity,
   analyzeBrokerActivity,
   compareBrokerActivity,
+  analyzeBrokerConsistency,
   type BrokerAnalysis,
   type BrokerComparison,
+  type ConsistencyAnalysis,
 } from "@/lib/parser-broker";
+import { BrokerConsistencyCard } from "@/components/BrokerConsistencyCard";
 
 type SourceKey = "data" | "nbsa" | "mf" | "rcm" | "broker" | "brokerPrev";
 
@@ -253,6 +257,14 @@ export function HomePage() {
     return compareBrokerActivity(prev, curr);
   }, [submitted]);
 
+  const brokerConsistency = useMemo<ConsistencyAnalysis | null>(() => {
+    if (!submitted) return null;
+    const a = parseBrokerActivity(submitted.broker ?? "");
+    const b = parseBrokerActivity(submitted.brokerPrev ?? "");
+    if (!a || !b) return null;
+    return analyzeBrokerConsistency(a, b);
+  }, [submitted]);
+
   return (
     <div className="min-h-screen w-full bg-background text-foreground">
       <div className="max-w-[1600px] mx-auto px-4 md:px-6 py-8 space-y-6">
@@ -431,6 +443,7 @@ export function HomePage() {
           filledCount={filledCount}
           brokerAnalysis={brokerAnalysis}
           brokerComparison={brokerComparison}
+          brokerConsistency={brokerConsistency}
           onClose={handleCloseResult}
         />
       )}
@@ -444,6 +457,7 @@ function ResultModal({
   filledCount,
   brokerAnalysis,
   brokerComparison,
+  brokerConsistency,
   onClose,
 }: {
   merged: MergedTable | null;
@@ -451,6 +465,7 @@ function ResultModal({
   filledCount: number;
   brokerAnalysis: BrokerAnalysis | null;
   brokerComparison: BrokerComparison | null;
+  brokerConsistency: ConsistencyAnalysis | null;
   onClose: () => void;
 }) {
   const [tab, setTab] = useState<"rekomendasi" | "top-broker" | "bandingkan">(
@@ -630,15 +645,28 @@ function ResultModal({
                   <BrokerCompareCard comparison={brokerComparison} />
                 )}
                 {tab === "rekomendasi" && merged && (
-                  <SummaryCard merged={merged} brokerAnalysis={brokerAnalysis} />
+                  <div className="space-y-4">
+                    {brokerConsistency && (
+                      <ErrorBoundary label="Konsistensi Broker">
+                        <BrokerConsistencyCard analysis={brokerConsistency} />
+                      </ErrorBoundary>
+                    )}
+                    <ErrorBoundary label="Rekomendasi">
+                      <SummaryCard merged={merged} brokerAnalysis={brokerAnalysis} />
+                    </ErrorBoundary>
+                  </div>
                 )}
                 {tab === "top-broker" && brokerAnalysis && (
-                  <TopBrokerCard analysis={brokerAnalysis} />
+                  <ErrorBoundary label="Semua Broker">
+                    <TopBrokerCard analysis={brokerAnalysis} />
+                  </ErrorBoundary>
                 )}
               </div>
             )}
             {merged && tab === "rekomendasi" && (
-              <ResultTable merged={merged} symbol={symbol} />
+              <ErrorBoundary label="Tabel Hasil">
+                <ResultTable merged={merged} symbol={symbol} />
+              </ErrorBoundary>
             )}
           </div>
         </div>

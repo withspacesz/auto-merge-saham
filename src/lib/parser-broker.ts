@@ -12,7 +12,8 @@ export type BrokerEntry = {
 
 export type BrokerActivity = {
   symbol: string;
-  date: string; // YYYY-MM-DD dari header
+  date: string; // YYYY-MM-DD tanggal akhir dari header
+  dateStart?: string; // YYYY-MM-DD tanggal awal range (kalau range), undefined kalau single day
   buys: BrokerEntry[]; // sorted by abs value desc
   sells: BrokerEntry[]; // sorted by abs value desc
 };
@@ -33,10 +34,20 @@ export function parseBrokerActivity(text: string): BrokerActivity | null {
   if (!text || !text.trim()) return null;
 
   const symMatch = text.match(/Broker Summary\s+([A-Z]{2,6})/i);
-  // Date format: "Tanggal 2026-04-24 s.d 2026-04-24" → ambil tanggal kedua kalau ada
-  const dateMatch =
-    text.match(/Tanggal\s+\d{4}-\d{2}-\d{2}\s+s\.?d\.?\s+(\d{4}-\d{2}-\d{2})/i) ||
-    text.match(/Tanggal\s+(\d{4}-\d{2}-\d{2})/i);
+  // Date format: "Tanggal 2026-04-20 s.d 2026-04-27" → tangkap kedua tanggal
+  const rangeMatch = text.match(
+    /Tanggal\s+(\d{4}-\d{2}-\d{2})\s+s\.?d\.?\s+(\d{4}-\d{2}-\d{2})/i,
+  );
+  const singleMatch = text.match(/Tanggal\s+(\d{4}-\d{2}-\d{2})/i);
+  let dateStart: string | undefined;
+  let dateEnd: string | undefined;
+  if (rangeMatch) {
+    dateStart = rangeMatch[1];
+    dateEnd = rangeMatch[2];
+    if (dateStart === dateEnd) dateStart = undefined; // single day, abaikan start
+  } else if (singleMatch) {
+    dateEnd = singleMatch[1];
+  }
 
   const buys: BrokerEntry[] = [];
   const sells: BrokerEntry[] = [];
@@ -78,7 +89,8 @@ export function parseBrokerActivity(text: string): BrokerActivity | null {
 
   return {
     symbol: symMatch ? symMatch[1].toUpperCase() : "",
-    date: dateMatch ? dateMatch[1] : "",
+    date: dateEnd ?? "",
+    dateStart,
     buys,
     sells,
   };
@@ -561,5 +573,232 @@ export function compareBrokerActivity(
     topFlipBuy: flippedToBuy[0],
     topNewDist: newDistributors[0],
     topFlipSell: flippedToSell[0],
+  };
+}
+
+// =====================================================================
+// Analisa konsistensi broker: bandingkan periode mingguan vs harian
+// untuk identifikasi akumulator/distributor konsisten, flip, dll.
+// Auto-detect mana yang mingguan (range terluas) vs harian.
+// =====================================================================
+
+export type ConsistencyLabel =
+  | "KONSISTEN_AKUM"   // buy di mingguan & harian
+  | "KONSISTEN_DIST"   // sell di mingguan & harian
+  | "FLIP_TO_DIST"     // buy mingguan, sell harian — WARNING profit taking
+  | "FLIP_TO_AKUM"     // sell mingguan, buy harian — bullish reversal
+  | "SELESAI_AKUM"     // buy mingguan, absent harian — pause / done
+  | "STOPPED_DIST"     // sell mingguan, absent harian — selesai jual
+  | "NEW_AKUM"         // absent mingguan, buy harian — baru muncul beli
+  | "NEW_DIST";        // absent mingguan, sell harian — baru muncul jual
+
+export type ConsistencyEntry = {
+  code: string;
+  info: BrokerInfo;
+  label: ConsistencyLabel;
+  weeklyValue: number;   // signed; 0 jika absent
+  dailyValue: number;    // signed; 0 jika absent
+  weeklyAvg?: number;
+  dailyAvg?: number;
+  weeklyRank?: number;
+  dailyRank?: number;
+  reason: string;        // narasi pendek per broker
+  impactScore: number;   // untuk ranking dalam bucket
+};
+
+export type ConsistencyAnalysis = {
+  weekly: BrokerActivity;
+  daily: BrokerActivity;
+  weeklyRangeDays: number;
+  // bucket utama
+  konsistenAkum: ConsistencyEntry[];   // KONSISTEN_AKUM (akselerasi/steady)
+  newOrFlipAkum: ConsistencyEntry[];   // FLIP_TO_AKUM + NEW_AKUM (entry baru)
+  selesaiAkum: ConsistencyEntry[];     // SELESAI_AKUM
+  flipWarning: ConsistencyEntry[];     // FLIP_TO_DIST (paling penting!)
+  konsistenDist: ConsistencyEntry[];   // KONSISTEN_DIST
+  newOrFreshDist: ConsistencyEntry[];  // NEW_DIST
+  stoppedDist: ConsistencyEntry[];     // STOPPED_DIST
+  // ringkasan akhir
+  topAccumulators: ConsistencyEntry[]; // top 1-3 paling konsisten akum (digabung)
+  topRisks: ConsistencyEntry[];        // top flip + dist konsisten
+  conclusion: string;                  // kalimat penutup gaya naratif
+};
+
+function dateRangeDays(act: BrokerActivity): number {
+  if (!act.dateStart || !act.date) return 1;
+  const a = new Date(act.dateStart).getTime();
+  const b = new Date(act.date).getTime();
+  if (isNaN(a) || isNaN(b)) return 1;
+  return Math.max(1, Math.round((b - a) / 86_400_000) + 1);
+}
+
+function sideValue(act: BrokerActivity, code: string): {
+  value: number; avg?: number; rank?: number;
+} {
+  const c = code.toUpperCase();
+  const buy = act.buys.find((e) => e.code.toUpperCase() === c);
+  if (buy) return { value: Math.abs(buy.value), avg: buy.avg, rank: buy.rank };
+  const sell = act.sells.find((e) => e.code.toUpperCase() === c);
+  if (sell) return { value: -Math.abs(sell.value), avg: sell.avg, rank: sell.rank };
+  return { value: 0 };
+}
+
+function classify(weeklyVal: number, dailyVal: number): ConsistencyLabel {
+  const wBuy = weeklyVal > 0, wSell = weeklyVal < 0, wAbs = weeklyVal === 0;
+  const dBuy = dailyVal > 0, dSell = dailyVal < 0, dAbs = dailyVal === 0;
+  if (wBuy && dBuy) return "KONSISTEN_AKUM";
+  if (wSell && dSell) return "KONSISTEN_DIST";
+  if (wBuy && dSell) return "FLIP_TO_DIST";
+  if (wSell && dBuy) return "FLIP_TO_AKUM";
+  if (wBuy && dAbs) return "SELESAI_AKUM";
+  if (wSell && dAbs) return "STOPPED_DIST";
+  if (wAbs && dBuy) return "NEW_AKUM";
+  if (wAbs && dSell) return "NEW_DIST";
+  return "SELESAI_AKUM"; // unreachable
+}
+
+function buildReason(
+  e: Omit<ConsistencyEntry, "reason" | "impactScore">,
+  weeklyDays: number,
+): string {
+  const w = fmtIDR(e.weeklyValue);
+  const d = fmtIDR(e.dailyValue);
+  const wa = e.weeklyAvg ? ` (avg ${e.weeklyAvg})` : "";
+  const da = e.dailyAvg ? ` (avg ${e.dailyAvg})` : "";
+  switch (e.label) {
+    case "KONSISTEN_AKUM": {
+      // Cek apakah harian mendominasi mingguan (akselerasi)
+      const dailyShare = weeklyDays > 1 && e.weeklyValue > 0
+        ? Math.abs(e.dailyValue) / Math.abs(e.weeklyValue)
+        : 0;
+      if (dailyShare >= 0.6) {
+        return `Net buy mingguan ${w}, dan harian ${d}${da} — beli paling agresif justru di hari terakhir, akumulasi sedang akselerasi.`;
+      }
+      return `Net buy mingguan ${w}${wa}, harian ${d}${da} — masih lanjut beli, konsisten akumulasi.`;
+    }
+    case "FLIP_TO_AKUM":
+      return `Mingguan jual ${w}, tapi harian berbalik beli ${d}${da} — sinyal reversal, mungkin sudah selesai cut loss / mulai akum.`;
+    case "NEW_AKUM":
+      return `Tidak masuk top mingguan, hari ini muncul beli ${d}${da} — broker baru masuk akumulasi.`;
+    case "FLIP_TO_DIST":
+      return `Sempat akum mingguan ${w}, hari ini jadi top sell ${d}${da} — flip ke distribusi, kemungkinan profit taking. Waspada.`;
+    case "SELESAI_AKUM":
+      return `Akum besar mingguan ${w}${wa}, tapi hari ini absen — kemungkinan fase akum sudah selesai / pause.`;
+    case "KONSISTEN_DIST":
+      return `Distribusi mingguan ${w} dan harian ${d}${da} — seller konsisten, tekanan jual berlanjut.`;
+    case "NEW_DIST":
+      return `Tidak ada di mingguan, hari ini langsung muncul jual ${d}${da} — distributor baru.`;
+    case "STOPPED_DIST":
+      return `Jual mingguan ${w}, hari ini absen — kemungkinan sudah selesai distribusi.`;
+  }
+}
+
+export function analyzeBrokerConsistency(
+  a: BrokerActivity,
+  b: BrokerActivity,
+): ConsistencyAnalysis | null {
+  if (!a || !b) return null;
+  const aDays = dateRangeDays(a);
+  const bDays = dateRangeDays(b);
+  // Kalau dua-duanya single day yang berbeda tanggal, perlakukan input pertama (yang dianggap "Sebelumnya") sebagai baseline.
+  const weekly = aDays >= bDays ? a : b;
+  const daily = aDays >= bDays ? b : a;
+  const weeklyRangeDays = dateRangeDays(weekly);
+
+  // Sanity: harus berbeda (kalau identik, return null biar tidak tampil)
+  if (weekly === daily) return null;
+
+  const codes = new Set<string>();
+  for (const e of weekly.buys) codes.add(e.code.toUpperCase());
+  for (const e of weekly.sells) codes.add(e.code.toUpperCase());
+  for (const e of daily.buys) codes.add(e.code.toUpperCase());
+  for (const e of daily.sells) codes.add(e.code.toUpperCase());
+
+  const all: ConsistencyEntry[] = [];
+  for (const code of codes) {
+    const w = sideValue(weekly, code);
+    const d = sideValue(daily, code);
+    const label = classify(w.value, d.value);
+    const base: Omit<ConsistencyEntry, "reason" | "impactScore"> = {
+      code,
+      info: getBrokerInfo(code),
+      label,
+      weeklyValue: w.value,
+      dailyValue: d.value,
+      weeklyAvg: w.avg,
+      dailyAvg: d.avg,
+      weeklyRank: w.rank,
+      dailyRank: d.rank,
+    };
+    const reason = buildReason(base, weeklyRangeDays);
+    // Skor dampak: gabungan magnitude mingguan + harian
+    const impactScore = Math.abs(w.value) + Math.abs(d.value);
+    all.push({ ...base, reason, impactScore });
+  }
+
+  const byLabel = (lbl: ConsistencyLabel) =>
+    all.filter((e) => e.label === lbl).sort((a, b) => b.impactScore - a.impactScore);
+
+  const konsistenAkum = byLabel("KONSISTEN_AKUM");
+  const newOrFlipAkum = [...byLabel("FLIP_TO_AKUM"), ...byLabel("NEW_AKUM")]
+    .sort((a, b) => b.impactScore - a.impactScore);
+  const selesaiAkum = byLabel("SELESAI_AKUM");
+  const flipWarning = byLabel("FLIP_TO_DIST");
+  const konsistenDist = byLabel("KONSISTEN_DIST");
+  const newOrFreshDist = byLabel("NEW_DIST");
+  const stoppedDist = byLabel("STOPPED_DIST");
+
+  const topAccumulators = [...konsistenAkum, ...newOrFlipAkum]
+    .sort((a, b) => b.impactScore - a.impactScore)
+    .slice(0, 3);
+  const topRisks = [...flipWarning, ...konsistenDist]
+    .sort((a, b) => b.impactScore - a.impactScore)
+    .slice(0, 3);
+
+  // Rangkai kesimpulan naratif gaya Claude
+  const conclusionParts: string[] = [];
+  if (topAccumulators.length > 0) {
+    const names = topAccumulators
+      .slice(0, 2)
+      .map((e) => `${e.code} (${e.info.name})`)
+      .join(" dan ");
+    conclusionParts.push(`${names} jadi akumulator paling konsisten`);
+  }
+  if (flipWarning.length > 0) {
+    const f = flipWarning[0];
+    conclusionParts.push(
+      `${f.code} perlu diwaspadai — sempat akum mingguan tapi sudah flip jual hari ini`,
+    );
+  }
+  if (selesaiAkum.length > 0 && selesaiAkum[0].impactScore > 1e9) {
+    const s = selesaiAkum[0];
+    conclusionParts.push(
+      `${s.code} (akum mingguan terbesar ${fmtIDR(s.weeklyValue)}) absen hari ini — kemungkinan fase akum sudah selesai`,
+    );
+  }
+  if (konsistenDist.length > 0) {
+    const d = konsistenDist[0];
+    conclusionParts.push(
+      `${d.code} jadi seller paling konsisten ${fmtIDR(d.weeklyValue)} sepekan — driver utama tekanan jual`,
+    );
+  }
+  const conclusion = conclusionParts.length > 0
+    ? conclusionParts.join(". ") + "."
+    : "Belum ada pola dominan dari konsistensi broker.";
+
+  return {
+    weekly,
+    daily,
+    weeklyRangeDays,
+    konsistenAkum,
+    newOrFlipAkum,
+    selesaiAkum,
+    flipWarning,
+    konsistenDist,
+    newOrFreshDist,
+    stoppedDist,
+    topAccumulators,
+    topRisks,
+    conclusion,
   };
 }
