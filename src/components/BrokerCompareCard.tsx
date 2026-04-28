@@ -14,6 +14,20 @@ function fmtIDR(n: number): string {
   return `${sign}${abs.toFixed(0)}`;
 }
 
+function signedClass(n: number): string {
+  if (n > 0) return "text-emerald-300";
+  if (n < 0) return "text-rose-300";
+  return "text-muted-foreground";
+}
+
+function ColoredIDR({ n, bold = true }: { n: number; bold?: boolean }) {
+  return (
+    <span className={`${signedClass(n)} ${bold ? "font-semibold" : ""}`}>
+      {fmtIDR(n)}
+    </span>
+  );
+}
+
 function typeLabel(t: BrokerType): string {
   if (t === "asing") return "Asing";
   if (t === "lokal") return "Lokal";
@@ -54,6 +68,12 @@ export function BrokerCompareCard({ comparison }: Props) {
     flippedToSell.length +
     increasedSell.length;
 
+  const hasSecondary =
+    decreasedBuy.length > 0 ||
+    decreasedSell.length > 0 ||
+    exitedBuy.length > 0 ||
+    exitedSell.length > 0;
+
   return (
     <div className="rounded-xl border border-border bg-card overflow-hidden">
       <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2 border-b border-border bg-gradient-to-r from-amber-500/5 via-emerald-500/5 to-rose-500/5">
@@ -71,93 +91,104 @@ export function BrokerCompareCard({ comparison }: Props) {
       <NarrativeBanner comparison={comparison} totalSignals={totalSignals} />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-border">
-        <BucketSection
-          title="Mulai Akumulasi"
-          subtitle="Broker baru muncul di NET BUY (sebelumnya tidak ada)"
-          tone="emerald"
-          icon={<Sparkles className="h-4 w-4" />}
-          entries={newAccumulators}
-          variant="newBuy"
-        />
-        <BucketSection
-          title="Berbalik Akum (SELL → BUY)"
-          subtitle="Sebelumnya jualan, sekarang malah memborong — sinyal kuat mulai akumulasi"
-          tone="emerald"
-          icon={<TrendingUp className="h-4 w-4" />}
-          entries={flippedToBuy}
-          variant="flipBuy"
-        />
-        <BucketSection
-          title="Tambah Akumulasi"
-          subtitle="Broker buy → buy dengan posisi membesar"
-          tone="emerald-soft"
-          icon={<TrendingUp className="h-4 w-4" />}
-          entries={increasedBuy}
-          variant="increasedBuy"
-        />
-        <BucketSection
-          title="Mulai Distribusi"
-          subtitle="Broker baru muncul di NET SELL (sebelumnya tidak ada)"
-          tone="rose"
-          icon={<UserPlus className="h-4 w-4" />}
-          entries={newDistributors}
-          variant="newSell"
-        />
-        <BucketSection
-          title="Berbalik Dist (BUY → SELL)"
-          subtitle="Sebelumnya borong, sekarang malah jualan — sinyal kuat mulai distribusi"
-          tone="rose"
-          icon={<TrendingDown className="h-4 w-4" />}
-          entries={flippedToSell}
-          variant="flipSell"
-        />
-        <BucketSection
-          title="Tambah Distribusi"
-          subtitle="Broker sell → sell dengan posisi jual membesar"
-          tone="rose-soft"
-          icon={<TrendingDown className="h-4 w-4" />}
-          entries={increasedSell}
-          variant="increasedSell"
-        />
+        {/* KOLOM KIRI — semua AKUMULASI */}
+        <div className="flex flex-col divide-y divide-border bg-card">
+          <BucketSection
+            title="Mulai Akumulasi"
+            subtitle="Broker baru muncul di NET BUY (sebelumnya tidak ada)"
+            tone="emerald"
+            icon={<Sparkles className="h-4 w-4" />}
+            entries={newAccumulators}
+            variant="newBuy"
+          />
+          <BucketSection
+            title="Berbalik Akum (SELL → BUY)"
+            subtitle="Sebelumnya jualan, sekarang malah memborong"
+            tone="emerald"
+            icon={<TrendingUp className="h-4 w-4" />}
+            entries={flippedToBuy}
+            variant="flipBuy"
+          />
+          <BucketSection
+            title="Tambah Akumulasi"
+            subtitle="Broker buy → buy dengan posisi membesar"
+            tone="emerald-soft"
+            icon={<TrendingUp className="h-4 w-4" />}
+            entries={increasedBuy}
+            variant="increasedBuy"
+          />
+        </div>
+
+        {/* KOLOM KANAN — semua DISTRIBUSI */}
+        <div className="flex flex-col divide-y divide-border bg-card">
+          <BucketSection
+            title="Mulai Distribusi"
+            subtitle="Broker baru muncul di NET SELL (sebelumnya tidak ada)"
+            tone="rose"
+            icon={<UserPlus className="h-4 w-4" />}
+            entries={newDistributors}
+            variant="newSell"
+          />
+          <BucketSection
+            title="Berbalik Dist (BUY → SELL)"
+            subtitle="Sebelumnya borong, sekarang malah jualan"
+            tone="rose"
+            icon={<TrendingDown className="h-4 w-4" />}
+            entries={flippedToSell}
+            variant="flipSell"
+          />
+          <BucketSection
+            title="Tambah Distribusi"
+            subtitle="Broker sell → sell dengan posisi jual membesar"
+            tone="rose-soft"
+            icon={<TrendingDown className="h-4 w-4" />}
+            entries={increasedSell}
+            variant="increasedSell"
+          />
+        </div>
       </div>
 
-      {(decreasedBuy.length > 0 ||
-        decreasedSell.length > 0 ||
-        exitedBuy.length > 0 ||
-        exitedSell.length > 0) && (
+      {hasSecondary && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-border border-t border-border">
-          <BucketSection
-            title="Akum Berkurang"
-            subtitle="Masih buy tapi lot/value-nya menyusut"
-            tone="muted"
-            icon={<TrendingDown className="h-4 w-4" />}
-            entries={decreasedBuy}
-            variant="decreasedBuy"
-          />
-          <BucketSection
-            title="Dist Berkurang"
-            subtitle="Masih sell tapi lot/value-nya menyusut"
-            tone="muted"
-            icon={<TrendingUp className="h-4 w-4" />}
-            entries={decreasedSell}
-            variant="decreasedSell"
-          />
-          <BucketSection
-            title="Selesai Akumulasi"
-            subtitle="Sebelumnya buy, sekarang hilang dari Top 10 — kemungkinan take-profit / close"
-            tone="muted"
-            icon={<UserMinus className="h-4 w-4" />}
-            entries={exitedBuy}
-            variant="exitedBuy"
-          />
-          <BucketSection
-            title="Selesai Distribusi"
-            subtitle="Sebelumnya sell, sekarang hilang dari Top 10 — kemungkinan selesai jual / cover"
-            tone="muted"
-            icon={<UserMinus className="h-4 w-4" />}
-            entries={exitedSell}
-            variant="exitedSell"
-          />
+          {/* KIRI — penurunan / selesai dari sisi AKUM */}
+          <div className="flex flex-col divide-y divide-border bg-card">
+            <BucketSection
+              title="Akum Berkurang"
+              subtitle="Masih buy tapi lot/value-nya menyusut"
+              tone="muted"
+              icon={<TrendingDown className="h-4 w-4" />}
+              entries={decreasedBuy}
+              variant="decreasedBuy"
+            />
+            <BucketSection
+              title="Selesai Akumulasi"
+              subtitle="Sebelumnya buy, sekarang hilang dari Top 10"
+              tone="muted"
+              icon={<UserMinus className="h-4 w-4" />}
+              entries={exitedBuy}
+              variant="exitedBuy"
+            />
+          </div>
+
+          {/* KANAN — penurunan / selesai dari sisi DIST */}
+          <div className="flex flex-col divide-y divide-border bg-card">
+            <BucketSection
+              title="Dist Berkurang"
+              subtitle="Masih sell tapi lot/value-nya menyusut"
+              tone="muted"
+              icon={<TrendingUp className="h-4 w-4" />}
+              entries={decreasedSell}
+              variant="decreasedSell"
+            />
+            <BucketSection
+              title="Selesai Distribusi"
+              subtitle="Sebelumnya sell, sekarang hilang dari Top 10"
+              tone="muted"
+              icon={<UserMinus className="h-4 w-4" />}
+              entries={exitedSell}
+              variant="exitedSell"
+            />
+          </div>
         </div>
       )}
     </div>
@@ -171,42 +202,80 @@ function NarrativeBanner({
   comparison: BrokerComparison;
   totalSignals: number;
 }) {
-  const lines: string[] = [];
-
   const fmtNames = (arr: BrokerCompareEntry[], n = 3) =>
     arr.slice(0, n).map((e) => e.code).join(", ");
+
+  const lines: React.ReactNode[] = [];
 
   if (comparison.flippedToBuy.length > 0) {
     const top = comparison.flippedToBuy[0];
     lines.push(
-      `${comparison.flippedToBuy.length} broker BERBALIK akum (sebelumnya jual, sekarang borong): ${fmtNames(comparison.flippedToBuy)}${comparison.flippedToBuy.length > 3 ? ", ..." : ""}. Top: ${top.code} (${top.info.name}) ${fmtIDR(top.prevValue)} → ${fmtIDR(top.currValue)}.`,
+      <>
+        <span className="text-emerald-300 font-semibold">
+          {comparison.flippedToBuy.length} broker BERBALIK akum
+        </span>{" "}
+        (sebelumnya jual, sekarang borong): {fmtNames(comparison.flippedToBuy)}
+        {comparison.flippedToBuy.length > 3 ? ", ..." : ""}. Top:{" "}
+        <span className="text-foreground font-semibold">{top.code}</span> ({top.info.name}){" "}
+        <ColoredIDR n={top.prevValue} /> <ArrowRight className="inline h-3 w-3 mx-0.5 text-amber-300" />{" "}
+        <ColoredIDR n={top.currValue} />.
+      </>,
     );
   }
   if (comparison.newAccumulators.length > 0) {
     const top = comparison.newAccumulators[0];
     lines.push(
-      `${comparison.newAccumulators.length} broker BARU MUNCUL akumulasi: ${fmtNames(comparison.newAccumulators)}${comparison.newAccumulators.length > 3 ? ", ..." : ""}. Top: ${top.code} (${top.info.name}) ${fmtIDR(top.currValue)}.`,
+      <>
+        <span className="text-emerald-300 font-semibold">
+          {comparison.newAccumulators.length} broker BARU MUNCUL akumulasi
+        </span>
+        : {fmtNames(comparison.newAccumulators)}
+        {comparison.newAccumulators.length > 3 ? ", ..." : ""}. Top:{" "}
+        <span className="text-foreground font-semibold">{top.code}</span> ({top.info.name}){" "}
+        <ColoredIDR n={top.currValue} />.
+      </>,
     );
   }
   if (comparison.flippedToSell.length > 0) {
     const top = comparison.flippedToSell[0];
     lines.push(
-      `${comparison.flippedToSell.length} broker BERBALIK dist (sebelumnya borong, sekarang jual): ${fmtNames(comparison.flippedToSell)}${comparison.flippedToSell.length > 3 ? ", ..." : ""}. Top: ${top.code} (${top.info.name}) ${fmtIDR(top.prevValue)} → ${fmtIDR(top.currValue)}.`,
+      <>
+        <span className="text-rose-300 font-semibold">
+          {comparison.flippedToSell.length} broker BERBALIK dist
+        </span>{" "}
+        (sebelumnya borong, sekarang jual): {fmtNames(comparison.flippedToSell)}
+        {comparison.flippedToSell.length > 3 ? ", ..." : ""}. Top:{" "}
+        <span className="text-foreground font-semibold">{top.code}</span> ({top.info.name}){" "}
+        <ColoredIDR n={top.prevValue} /> <ArrowRight className="inline h-3 w-3 mx-0.5 text-amber-300" />{" "}
+        <ColoredIDR n={top.currValue} />.
+      </>,
     );
   }
   if (comparison.newDistributors.length > 0) {
     const top = comparison.newDistributors[0];
     lines.push(
-      `${comparison.newDistributors.length} broker BARU MUNCUL distribusi: ${fmtNames(comparison.newDistributors)}${comparison.newDistributors.length > 3 ? ", ..." : ""}. Top: ${top.code} (${top.info.name}) ${fmtIDR(top.currValue)}.`,
+      <>
+        <span className="text-rose-300 font-semibold">
+          {comparison.newDistributors.length} broker BARU MUNCUL distribusi
+        </span>
+        : {fmtNames(comparison.newDistributors)}
+        {comparison.newDistributors.length > 3 ? ", ..." : ""}. Top:{" "}
+        <span className="text-foreground font-semibold">{top.code}</span> ({top.info.name}){" "}
+        <ColoredIDR n={top.currValue} />.
+      </>,
     );
   }
 
   if (totalSignals === 0) {
-    lines.push("Tidak ada pergeseran berarti antara dua snapshot — komposisi broker relatif sama.");
+    lines.push(
+      <span className="italic">
+        Tidak ada pergeseran berarti antara dua snapshot — komposisi broker relatif sama.
+      </span>,
+    );
   }
 
   return (
-    <div className="px-4 py-3 border-b border-border bg-muted/15 space-y-1">
+    <div className="px-4 py-3 border-b border-border bg-muted/15 space-y-1.5">
       {lines.map((line, i) => (
         <p key={i} className="text-[12px] leading-relaxed text-muted-foreground">
           <span className="text-amber-300/80">▸</span> {line}
@@ -309,56 +378,35 @@ function CompareRow({
   if (variant === "newBuy" || variant === "newSell") {
     valueLine = (
       <span className="font-mono text-[11px] text-muted-foreground">
-        baru muncul →{" "}
-        <span className={isBuyVariant ? "text-emerald-300" : "text-rose-300"}>
-          {fmtIDR(entry.currValue)}
-        </span>
+        baru muncul → <ColoredIDR n={entry.currValue} />
       </span>
     );
   } else if (variant === "flipBuy" || variant === "flipSell") {
     valueLine = (
       <span className="font-mono text-[11px] text-muted-foreground">
-        <span className={entry.prevValue > 0 ? "text-emerald-400/70" : "text-rose-400/70"}>
-          {fmtIDR(entry.prevValue)}
-        </span>{" "}
+        <ColoredIDR n={entry.prevValue} />{" "}
         <ArrowRight className="inline h-3 w-3 mx-0.5 text-amber-300" />{" "}
-        <span className={isBuyVariant ? "text-emerald-300" : "text-rose-300"}>
-          {fmtIDR(entry.currValue)}
-        </span>
+        <ColoredIDR n={entry.currValue} />
         <span className="ml-2 text-amber-300/80">
-          (Δ {fmtIDR(entry.delta)})
+          (Δ <ColoredIDR n={entry.delta} bold={false} />)
         </span>
       </span>
     );
   } else if (variant === "exitedBuy" || variant === "exitedSell") {
     valueLine = (
       <span className="font-mono text-[11px] text-muted-foreground">
-        sebelumnya{" "}
-        <span className={entry.prevValue > 0 ? "text-emerald-400/70" : "text-rose-400/70"}>
-          {fmtIDR(entry.prevValue)}
-        </span>{" "}
-        → hilang dari Top 10
+        sebelumnya <ColoredIDR n={entry.prevValue} /> → hilang dari Top 10
       </span>
     );
   } else {
     // increased / decreased same-side
     valueLine = (
       <span className="font-mono text-[11px] text-muted-foreground">
-        <span className={entry.prevValue > 0 ? "text-emerald-400/70" : "text-rose-400/70"}>
-          {fmtIDR(entry.prevValue)}
-        </span>{" "}
+        <ColoredIDR n={entry.prevValue} />{" "}
         <ArrowRight className="inline h-3 w-3 mx-0.5 text-muted-foreground" />{" "}
-        <span className={isBuyVariant ? "text-emerald-300" : "text-rose-300"}>
-          {fmtIDR(entry.currValue)}
-        </span>
-        <span
-          className={`ml-2 ${
-            (isBuyVariant && entry.delta > 0) || (!isBuyVariant && entry.delta < 0)
-              ? "text-amber-300/80"
-              : "text-muted-foreground/70"
-          }`}
-        >
-          (Δ {fmtIDR(entry.delta)})
+        <ColoredIDR n={entry.currValue} />
+        <span className="ml-2 text-muted-foreground/70">
+          (Δ <ColoredIDR n={entry.delta} bold={false} />)
         </span>
       </span>
     );

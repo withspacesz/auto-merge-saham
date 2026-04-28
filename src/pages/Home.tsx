@@ -598,7 +598,9 @@ function ResultModal({
                 )}
               </div>
             )}
-            {merged && <ResultTable merged={merged} symbol={symbol} />}
+            {merged && tab === "rekomendasi" && (
+              <ResultTable merged={merged} symbol={symbol} />
+            )}
           </div>
         </div>
       </div>
