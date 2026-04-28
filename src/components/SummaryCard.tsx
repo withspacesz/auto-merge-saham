@@ -480,19 +480,72 @@ export function SummaryCard({ merged, brokerAnalysis }: Props) {
     }
   }
 
-  // Tambah ringkasan asing/lokal Ket terbaru ke reasons (kalau belum)
-  if (latest.asingScore !== 0) {
+  // Ket asing/lokal hari terakhir hanya ditampilkan kalau belum tertutup
+  // pattern lain — biar chip tidak overload (max 4 chip total).
+  const hasAsingPattern = reasons.some((r) =>
+    /Asing|Bandar|Distribusi|Akumulasi/i.test(r.text),
+  );
+  const hasLokalPattern = reasons.some((r) =>
+    /Lokal|Jaga harga|Distribusi serentak/i.test(r.text),
+  );
+  if (latest.asingScore !== 0 && !hasAsingPattern) {
     reasons.push({
       text: `Asing ${latest.ketNbsa}`,
       tone: ketTone(latest.asingScore),
     });
   }
-  if (latest.lokalScore !== 0) {
+  if (latest.lokalScore !== 0 && !hasLokalPattern) {
     reasons.push({
       text: `Lokal ${latest.ketMf}`,
       tone: ketTone(latest.lokalScore),
     });
   }
+
+  // Driver chip — selalu di paling depan supaya user langsung lihat
+  // siapa yg jadi driver hari terakhir + arahnya AKUM/DIST.
+  if (brokerAnalysis) {
+    const { narrative, netAsing, netLokal } = brokerAnalysis;
+    const dirAkum = (n: number): "AKUM" | "DIST" | null =>
+      n > 0 ? "AKUM" : n < 0 ? "DIST" : null;
+    let driverText: string | null = null;
+    let driverTone: Tone = "neutral";
+    switch (narrative.label) {
+      case "ASING DRIVER": {
+        const dir = dirAkum(netAsing);
+        if (dir) {
+          driverText = `Asing Driver ${dir}`;
+          driverTone = dir === "AKUM" ? "green" : "red";
+        }
+        break;
+      }
+      case "LOKAL DRIVER": {
+        const dir = dirAkum(netLokal);
+        if (dir) {
+          driverText = `Lokal Driver ${dir}`;
+          driverTone = dir === "AKUM" ? "green" : "red";
+        }
+        break;
+      }
+      case "DUA-DUANYA AKUM":
+        driverText = "Asing+Lokal AKUM";
+        driverTone = "green";
+        break;
+      case "DISTRIBUSI":
+        driverText = "Asing+Lokal DIST";
+        driverTone = "red";
+        break;
+      case "CAMPURAN":
+        driverText = "Broker Campuran";
+        driverTone = "amber";
+        break;
+    }
+    if (driverText) {
+      reasons.unshift({ text: driverText, tone: driverTone });
+    }
+  }
+
+  // Cap di 4 chip terpenting — sisanya disimpan tapi tidak ditampilkan.
+  const reasonsTopFour = reasons.slice(0, 4);
 
   // ===== Rekomendasi =====
   type Recommendation = {
@@ -573,9 +626,9 @@ export function SummaryCard({ merged, brokerAnalysis }: Props) {
         <RecommendationBanner
           recommendation={recommendation}
           score={score}
-          reasons={reasons}
+          reasons={reasonsTopFour}
+          brokerAnalysis={brokerAnalysis}
         />
-        {brokerAnalysis && <BrokerSummaryBlock analysis={brokerAnalysis} />}
       </div>
 
       <div className="px-3 pb-3 grid grid-cols-1 md:grid-cols-2 gap-2">
@@ -806,6 +859,7 @@ function RecommendationBanner({
   recommendation,
   score,
   reasons,
+  brokerAnalysis,
 }: {
   recommendation: {
     label: "AKUMULASI" | "TAHAN" | "KURANGI";
@@ -815,6 +869,7 @@ function RecommendationBanner({
   };
   score: number;
   reasons: Array<{ text: string; tone: Tone }>;
+  brokerAnalysis?: BrokerAnalysis | null;
 }) {
   const { label, tone, headline, detail } = recommendation;
   const scoreSign = score > 0 ? "+" : "";
@@ -869,112 +924,139 @@ function RecommendationBanner({
           )}
         </div>
       </div>
+
+      {brokerAnalysis && (
+        <BandarConclusion
+          analysis={brokerAnalysis}
+          recommendationTone={tone}
+          recommendationLabel={label}
+        />
+      )}
     </div>
   );
 }
 
-function BrokerSummaryBlock({ analysis }: { analysis: BrokerAnalysis }) {
-  const { narrative, netAsing, netLokal, netBSA, asingEntries, lokalEntries, date } = analysis;
+function BandarConclusion({
+  analysis,
+  recommendationTone,
+  recommendationLabel,
+}: {
+  analysis: BrokerAnalysis;
+  recommendationTone: Tone;
+  recommendationLabel: "AKUMULASI" | "TAHAN" | "KURANGI";
+}) {
+  const {
+    narrative,
+    netAsing,
+    netLokal,
+    date,
+    topAsingBuyer,
+    topAsingSeller,
+    topLokalBuyer,
+    topLokalSeller,
+    totalBuy,
+  } = analysis;
+  const tone = (narrative.tone as Tone) ?? "neutral";
 
-  const TONE_BG: Record<string, string> = {
-    green: "bg-emerald-500/10 border-emerald-500/30 ring-emerald-500/30",
-    red: "bg-rose-500/10 border-rose-500/30 ring-rose-500/30",
-    amber: "bg-amber-500/10 border-amber-500/30 ring-amber-500/30",
-    neutral: "bg-muted/20 border-border ring-border",
-  };
-  const TONE_TEXT: Record<string, string> = {
-    green: "text-emerald-300",
-    red: "text-rose-300",
-    amber: "text-amber-300",
-    neutral: "text-foreground",
-  };
-  const TONE_BADGE: Record<string, string> = {
-    green: "bg-emerald-500/20 text-emerald-300 ring-1 ring-emerald-500/40",
-    red: "bg-rose-500/20 text-rose-300 ring-1 ring-rose-500/40",
-    amber: "bg-amber-500/20 text-amber-300 ring-1 ring-amber-500/40",
-    neutral: "bg-muted text-muted-foreground ring-1 ring-border",
-  };
+  // Insight ringkas (1 kalimat) yang nyebut nama broker dominan.
+  const insight = buildBrokerInsight({
+    netAsing,
+    netLokal,
+    topAsingBuyer,
+    topAsingSeller,
+    topLokalBuyer,
+    topLokalSeller,
+    totalBuy,
+  });
 
-  const fmtSide = (n: number): string => {
-    const abs = Math.abs(n);
-    const sign = n < 0 ? "-" : n > 0 ? "+" : "";
-    if (abs >= 1e9) return `${sign}${(abs / 1e9).toFixed(2)}M`;
-    if (abs >= 1e6) return `${sign}${(abs / 1e6).toFixed(2)}Jt`;
-    if (abs >= 1e3) return `${sign}${(abs / 1e3).toFixed(0)}rb`;
-    return `${sign}${abs.toFixed(0)}`;
-  };
-
-  const asingTone = netAsing > 0 ? "green" : netAsing < 0 ? "red" : "neutral";
-  const lokalTone = netLokal > 0 ? "green" : netLokal < 0 ? "red" : "neutral";
-  const nbsaTone = netBSA > 0 ? "green" : netBSA < 0 ? "red" : "neutral";
+  // Verdict prefix yg menyambung ke rekomendasi di atas — bukan kalimat berdiri sendiri.
+  const sejalan =
+    (recommendationTone === "green" && tone === "green") ||
+    (recommendationTone === "red" && tone === "red");
+  const bertentangan =
+    (recommendationTone === "green" && tone === "red") ||
+    (recommendationTone === "red" && tone === "green");
+  const arah =
+    recommendationLabel === "AKUMULASI"
+      ? "sinyal beli"
+      : recommendationLabel === "KURANGI"
+        ? "sinyal jual"
+        : "sinyal tahan";
+  const verdictPrefix = sejalan
+    ? `Searah dengan ${arah}:`
+    : bertentangan
+      ? `Berlawanan — perhatikan sebelum eksekusi:`
+      : `Konteks broker hari terakhir:`;
+  const verdictTone: Tone = sejalan ? tone : bertentangan ? "amber" : "neutral";
 
   return (
-    <div
-      className={`rounded-lg border p-3 ring-1 ring-inset ${TONE_BG[narrative.tone]}`}
-    >
-      <div className="flex items-center justify-between gap-2 mb-1.5 flex-wrap">
-        <div className="flex items-center gap-2">
-          <Building2 className="h-4 w-4 text-cyan-400" />
-          <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
-            Bandar Hari Terakhir
-          </span>
-          <span
-            className={`text-[10px] font-bold tracking-wider px-2 py-0.5 rounded uppercase ${TONE_BADGE[narrative.tone]}`}
-          >
-            {narrative.label}
-          </span>
-        </div>
-        <span className="text-[10px] text-muted-foreground">
-          {date} · {asingEntries.length} asing · {lokalEntries.length} lokal
+    <div className="mt-3 pt-3 border-t border-border/60 space-y-2">
+      <div className="flex items-center gap-2 flex-wrap">
+        <Building2 className="h-3.5 w-3.5 text-cyan-400 shrink-0" />
+        <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+          Konfirmasi Broker · {date}
         </span>
       </div>
 
-      <div className={`text-sm font-bold mb-1.5 ${TONE_TEXT[narrative.tone]}`}>
-        {narrative.headline}
-      </div>
-
-      <div className="grid grid-cols-3 gap-1.5 mb-2">
-        <BandarStat label="Asing" tone={asingTone} value={fmtSide(netAsing)} />
-        <BandarStat label="Lokal" tone={lokalTone} value={fmtSide(netLokal)} />
-        <BandarStat label="NBSA" tone={nbsaTone} value={fmtSide(netBSA)} />
-      </div>
-
-      <p className="text-[11px] md:text-xs text-muted-foreground leading-relaxed max-w-[680px]">
-        {narrative.detail}
+      <p className="text-[11px] md:text-xs text-foreground/90 leading-relaxed max-w-[680px]">
+        <span className={`font-semibold ${TONE_TEXT[verdictTone]}`}>
+          {verdictPrefix}
+        </span>{" "}
+        {insight}
       </p>
     </div>
   );
 }
 
-function BandarStat({
-  label,
-  tone,
-  value,
+function buildBrokerInsight({
+  netAsing,
+  netLokal,
+  topAsingBuyer,
+  topAsingSeller,
+  topLokalBuyer,
+  topLokalSeller,
+  totalBuy,
 }: {
-  label: string;
-  tone: "green" | "red" | "neutral" | "amber";
-  value: string;
-}) {
-  const bg =
-    tone === "green"
-      ? "bg-emerald-500/10 border-emerald-500/30"
-      : tone === "red"
-        ? "bg-rose-500/10 border-rose-500/30"
-        : "bg-muted/30 border-border";
-  const txt =
-    tone === "green"
-      ? "text-emerald-300"
-      : tone === "red"
-        ? "text-rose-300"
-        : "text-foreground";
-  return (
-    <div className={`rounded-md border px-2 py-1 ${bg}`}>
-      <div className="text-[9px] uppercase tracking-wider text-muted-foreground">
-        {label}
-      </div>
-      <div className={`text-sm font-bold font-mono tabular-nums ${txt}`}>
-        {value}
-      </div>
-    </div>
-  );
+  netAsing: number;
+  netLokal: number;
+  topAsingBuyer?: { code: string; value: number; info: { name: string } };
+  topAsingSeller?: { code: string; value: number; info: { name: string } };
+  topLokalBuyer?: { code: string; value: number; info: { name: string } };
+  topLokalSeller?: { code: string; value: number; info: { name: string } };
+  totalBuy: number;
+}): string {
+  const fmtAbs = (n: number) => fmtIDR(Math.abs(n)).replace(/^[+-]/, "");
+  const pct = (n: number) =>
+    totalBuy > 0 ? ` (~${((Math.abs(n) / totalBuy) * 100).toFixed(0)}% beli)` : "";
+
+  // Asing serap, lokal lepas — pola bandar asing
+  if (netAsing > 0 && netLokal < 0) {
+    const a = topAsingBuyer
+      ? `${topAsingBuyer.code} (${topAsingBuyer.info.name}) +${fmtAbs(topAsingBuyer.value)}${pct(topAsingBuyer.value)}`
+      : "asing";
+    const l = topLokalSeller
+      ? `${topLokalSeller.code} (${topLokalSeller.info.name}) -${fmtAbs(topLokalSeller.value)}`
+      : "lokal";
+    return `${a} serap di tengah distribusi lokal ${l} — pola klasik bandar asing yang ngangkat.`;
+  }
+  // Asing dist, lokal serap — bag holder warning
+  if (netAsing < 0 && netLokal > 0) {
+    const a = topAsingSeller
+      ? `${topAsingSeller.code} (${topAsingSeller.info.name}) -${fmtAbs(topAsingSeller.value)}`
+      : "asing";
+    const l = topLokalBuyer
+      ? `${topLokalBuyer.code} (${topLokalBuyer.info.name}) +${fmtAbs(topLokalBuyer.value)}`
+      : "lokal";
+    return `${a} buang ke ${l} — hati-hati lokal jadi bag holder.`;
+  }
+  // Sama-sama akum
+  if (netAsing > 0 && netLokal > 0) {
+    return `Asing & lokal sama-sama akumulasi — tekanan beli kompak dari dua sisi.`;
+  }
+  // Sama-sama dist
+  if (netAsing < 0 && netLokal < 0) {
+    return `Asing & lokal sama-sama distribusi — tekanan jual kuat, risiko lanjut turun.`;
+  }
+  // Mixed/neutral
+  return `Beli & jual saling tutup — belum ada driver dominan dari sisi broker.`;
 }

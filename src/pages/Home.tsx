@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Calendar, Check, Copy, Hash, X } from "lucide-react";
 import { ResultTable } from "@/components/ResultTable";
 import { SummaryCard } from "@/components/SummaryCard";
-import { BrokerCard } from "@/components/BrokerCard";
+import { TopBrokerCard } from "@/components/TopBrokerCard";
 import { mergeInputs, type MergedTable } from "@/lib/merger";
 import { parseBrokerActivity, analyzeBrokerActivity, type BrokerAnalysis } from "@/lib/parser-broker";
 
@@ -400,6 +400,12 @@ function ResultModal({
   const outerRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
+  const [tab, setTab] = useState<"rekomendasi" | "top-broker">("rekomendasi");
+
+  // Kalau broker analysis tidak ada, paksa tab kembali ke rekomendasi.
+  useEffect(() => {
+    if (!brokerAnalysis && tab === "top-broker") setTab("rekomendasi");
+  }, [brokerAnalysis, tab]);
 
   useLayoutEffect(() => {
     const inner = innerRef.current;
@@ -449,7 +455,7 @@ function ResultModal({
       ro.disconnect();
       window.removeEventListener("resize", recalc);
     };
-  }, [merged, symbol, brokerAnalysis]);
+  }, [merged, symbol, brokerAnalysis, tab]);
 
   return (
     <div
@@ -496,15 +502,62 @@ function ResultModal({
             }}
             className="space-y-3"
           >
-            {merged && (
-              <SummaryCard merged={merged} brokerAnalysis={brokerAnalysis} />
+            {(merged || brokerAnalysis) && (
+              <div>
+                <div className="flex items-center gap-1 mb-2">
+                  <TabButton
+                    active={tab === "rekomendasi"}
+                    onClick={() => setTab("rekomendasi")}
+                  >
+                    Rekomendasi
+                  </TabButton>
+                  {brokerAnalysis && (
+                    <TabButton
+                      active={tab === "top-broker"}
+                      onClick={() => setTab("top-broker")}
+                    >
+                      Semua Broker
+                    </TabButton>
+                  )}
+                </div>
+                {tab === "rekomendasi" && merged && (
+                  <SummaryCard merged={merged} brokerAnalysis={brokerAnalysis} />
+                )}
+                {tab === "top-broker" && brokerAnalysis && (
+                  <TopBrokerCard analysis={brokerAnalysis} />
+                )}
+              </div>
             )}
-            {brokerAnalysis && <BrokerCard analysis={brokerAnalysis} />}
             {merged && <ResultTable merged={merged} symbol={symbol} />}
           </div>
         </div>
       </div>
     </div>
+  );
+}
+
+function TabButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`relative px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors ${
+        active ? "text-emerald-400" : "text-muted-foreground hover:text-foreground"
+      }`}
+    >
+      {children}
+      {active && (
+        <span className="absolute left-3 right-3 -bottom-px h-0.5 bg-emerald-400 rounded-full" />
+      )}
+    </button>
   );
 }
 
