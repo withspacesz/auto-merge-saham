@@ -1,5 +1,6 @@
-import { Activity, Users, Globe2, Target, Calendar } from "lucide-react";
+import { Activity, Users, Globe2, Target, Calendar, Building2 } from "lucide-react";
 import type { MergedTable, MergedRow } from "@/lib/merger";
+import type { BrokerAnalysis } from "@/lib/parser-broker";
 
 const SUFFIX_MULT: Record<string, number> = { rb: 1e3, jt: 1e6, m: 1e9 };
 
@@ -121,9 +122,9 @@ function analyzeDay(r: MergedRow): DayInfo {
   };
 }
 
-type Props = { merged: MergedTable };
+type Props = { merged: MergedTable; brokerAnalysis?: BrokerAnalysis | null };
 
-export function SummaryCard({ merged }: Props) {
+export function SummaryCard({ merged, brokerAnalysis }: Props) {
   const allData = merged.rows.filter((r) => !r.__isTotal);
   if (allData.length === 0) return null;
 
@@ -568,12 +569,13 @@ export function SummaryCard({ merged }: Props) {
         </span>
       </div>
 
-      <div className="p-3">
+      <div className="p-3 space-y-2">
         <RecommendationBanner
           recommendation={recommendation}
           score={score}
           reasons={reasons}
         />
+        {brokerAnalysis && <BrokerSummaryBlock analysis={brokerAnalysis} />}
       </div>
 
       <div className="px-3 pb-3 grid grid-cols-1 md:grid-cols-2 gap-2">
@@ -866,6 +868,112 @@ function RecommendationBanner({
             </div>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function BrokerSummaryBlock({ analysis }: { analysis: BrokerAnalysis }) {
+  const { narrative, netAsing, netLokal, netBSA, asingEntries, lokalEntries, date } = analysis;
+
+  const TONE_BG: Record<string, string> = {
+    green: "bg-emerald-500/10 border-emerald-500/30 ring-emerald-500/30",
+    red: "bg-rose-500/10 border-rose-500/30 ring-rose-500/30",
+    amber: "bg-amber-500/10 border-amber-500/30 ring-amber-500/30",
+    neutral: "bg-muted/20 border-border ring-border",
+  };
+  const TONE_TEXT: Record<string, string> = {
+    green: "text-emerald-300",
+    red: "text-rose-300",
+    amber: "text-amber-300",
+    neutral: "text-foreground",
+  };
+  const TONE_BADGE: Record<string, string> = {
+    green: "bg-emerald-500/20 text-emerald-300 ring-1 ring-emerald-500/40",
+    red: "bg-rose-500/20 text-rose-300 ring-1 ring-rose-500/40",
+    amber: "bg-amber-500/20 text-amber-300 ring-1 ring-amber-500/40",
+    neutral: "bg-muted text-muted-foreground ring-1 ring-border",
+  };
+
+  const fmtSide = (n: number): string => {
+    const abs = Math.abs(n);
+    const sign = n < 0 ? "-" : n > 0 ? "+" : "";
+    if (abs >= 1e9) return `${sign}${(abs / 1e9).toFixed(2)}M`;
+    if (abs >= 1e6) return `${sign}${(abs / 1e6).toFixed(2)}Jt`;
+    if (abs >= 1e3) return `${sign}${(abs / 1e3).toFixed(0)}rb`;
+    return `${sign}${abs.toFixed(0)}`;
+  };
+
+  const asingTone = netAsing > 0 ? "green" : netAsing < 0 ? "red" : "neutral";
+  const lokalTone = netLokal > 0 ? "green" : netLokal < 0 ? "red" : "neutral";
+  const nbsaTone = netBSA > 0 ? "green" : netBSA < 0 ? "red" : "neutral";
+
+  return (
+    <div
+      className={`rounded-lg border p-3 ring-1 ring-inset ${TONE_BG[narrative.tone]}`}
+    >
+      <div className="flex items-center justify-between gap-2 mb-1.5 flex-wrap">
+        <div className="flex items-center gap-2">
+          <Building2 className="h-4 w-4 text-cyan-400" />
+          <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+            Bandar Hari Terakhir
+          </span>
+          <span
+            className={`text-[10px] font-bold tracking-wider px-2 py-0.5 rounded uppercase ${TONE_BADGE[narrative.tone]}`}
+          >
+            {narrative.label}
+          </span>
+        </div>
+        <span className="text-[10px] text-muted-foreground">
+          {date} · {asingEntries.length} asing · {lokalEntries.length} lokal
+        </span>
+      </div>
+
+      <div className={`text-sm font-bold mb-1.5 ${TONE_TEXT[narrative.tone]}`}>
+        {narrative.headline}
+      </div>
+
+      <div className="grid grid-cols-3 gap-1.5 mb-2">
+        <BandarStat label="Asing" tone={asingTone} value={fmtSide(netAsing)} />
+        <BandarStat label="Lokal" tone={lokalTone} value={fmtSide(netLokal)} />
+        <BandarStat label="NBSA" tone={nbsaTone} value={fmtSide(netBSA)} />
+      </div>
+
+      <p className="text-[11px] md:text-xs text-muted-foreground leading-relaxed max-w-[680px]">
+        {narrative.detail}
+      </p>
+    </div>
+  );
+}
+
+function BandarStat({
+  label,
+  tone,
+  value,
+}: {
+  label: string;
+  tone: "green" | "red" | "neutral" | "amber";
+  value: string;
+}) {
+  const bg =
+    tone === "green"
+      ? "bg-emerald-500/10 border-emerald-500/30"
+      : tone === "red"
+        ? "bg-rose-500/10 border-rose-500/30"
+        : "bg-muted/30 border-border";
+  const txt =
+    tone === "green"
+      ? "text-emerald-300"
+      : tone === "red"
+        ? "text-rose-300"
+        : "text-foreground";
+  return (
+    <div className={`rounded-md border px-2 py-1 ${bg}`}>
+      <div className="text-[9px] uppercase tracking-wider text-muted-foreground">
+        {label}
+      </div>
+      <div className={`text-sm font-bold font-mono tabular-nums ${txt}`}>
+        {value}
       </div>
     </div>
   );

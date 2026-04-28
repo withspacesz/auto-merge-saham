@@ -190,3 +190,212 @@ export function getBrokerInfo(code: string): BrokerInfo {
   const c = code.toUpperCase();
   return BROKERS[c] ?? { name: c, type: "unknown" };
 }
+
+// =====================================================================
+// Analisa broker activity → struktur untuk dipakai BrokerCard + SummaryCard
+// =====================================================================
+
+export type EnrichedEntry = BrokerEntry & {
+  side: "buy" | "sell";
+  info: BrokerInfo;
+};
+
+export type BrokerAnalysis = {
+  totalBuy: number;
+  totalSell: number;
+  netBSA: number;
+  netAsing: number;
+  netLokal: number;
+  netUnknown: number;
+  asingEntries: EnrichedEntry[]; // sorted by abs value desc
+  lokalEntries: EnrichedEntry[]; // sorted by abs value desc
+  unknownEntries: EnrichedEntry[];
+  topAsingBuyer?: EnrichedEntry;
+  topAsingSeller?: EnrichedEntry;
+  topLokalBuyer?: EnrichedEntry;
+  topLokalSeller?: EnrichedEntry;
+  narrative: BrokerNarrative;
+  date: string;
+  symbol: string;
+};
+
+export type BrokerNarrative = {
+  label:
+    | "ASING DRIVER"
+    | "LOKAL DRIVER"
+    | "DUA-DUANYA AKUM"
+    | "DISTRIBUSI"
+    | "CAMPURAN";
+  tone: "green" | "red" | "amber" | "neutral";
+  headline: string;
+  detail: string;
+};
+
+function fmtIDR(n: number): string {
+  const abs = Math.abs(n);
+  const sign = n < 0 ? "-" : n > 0 ? "+" : "";
+  if (abs >= 1e9) return `${sign}${(abs / 1e9).toFixed(2)}M`;
+  if (abs >= 1e6) return `${sign}${(abs / 1e6).toFixed(2)}Jt`;
+  if (abs >= 1e3) return `${sign}${(abs / 1e3).toFixed(0)}rb`;
+  return `${sign}${abs.toFixed(0)}`;
+}
+
+export function analyzeBrokerActivity(
+  broker: BrokerActivity,
+): BrokerAnalysis {
+  const all: EnrichedEntry[] = [
+    ...broker.buys.map((e) => ({ ...e, side: "buy" as const, info: getBrokerInfo(e.code) })),
+    ...broker.sells.map((e) => ({ ...e, side: "sell" as const, info: getBrokerInfo(e.code) })),
+  ];
+
+  const totalBuy = broker.buys.reduce((s, e) => s + e.value, 0);
+  const totalSell = broker.sells.reduce((s, e) => s + e.value, 0);
+  const netBSA = totalBuy + totalSell;
+
+  const sortByAbs = (arr: EnrichedEntry[]) =>
+    [...arr].sort((a, b) => Math.abs(b.value) - Math.abs(a.value));
+
+  const asingEntries = sortByAbs(all.filter((e) => e.info.type === "asing"));
+  const lokalEntries = sortByAbs(all.filter((e) => e.info.type === "lokal"));
+  const unknownEntries = sortByAbs(all.filter((e) => e.info.type === "unknown"));
+
+  const sumNet = (arr: EnrichedEntry[]) => arr.reduce((s, e) => s + e.value, 0);
+  const netAsing = sumNet(asingEntries);
+  const netLokal = sumNet(lokalEntries);
+  const netUnknown = sumNet(unknownEntries);
+
+  const buyersDesc = [...all].filter((e) => e.value > 0).sort((a, b) => b.value - a.value);
+  const sellersDesc = [...all].filter((e) => e.value < 0).sort((a, b) => a.value - b.value);
+
+  const topAsingBuyer = buyersDesc.find((e) => e.info.type === "asing");
+  const topAsingSeller = sellersDesc.find((e) => e.info.type === "asing");
+  const topLokalBuyer = buyersDesc.find((e) => e.info.type === "lokal");
+  const topLokalSeller = sellersDesc.find((e) => e.info.type === "lokal");
+
+  const narrative = buildNarrative({
+    netBSA,
+    netAsing,
+    netLokal,
+    topAsingBuyer,
+    topAsingSeller,
+    topLokalBuyer,
+    topLokalSeller,
+    totalBuy,
+  });
+
+  return {
+    totalBuy,
+    totalSell,
+    netBSA,
+    netAsing,
+    netLokal,
+    netUnknown,
+    asingEntries,
+    lokalEntries,
+    unknownEntries,
+    topAsingBuyer,
+    topAsingSeller,
+    topLokalBuyer,
+    topLokalSeller,
+    narrative,
+    date: broker.date,
+    symbol: broker.symbol,
+  };
+}
+
+function buildNarrative(args: {
+  netBSA: number;
+  netAsing: number;
+  netLokal: number;
+  topAsingBuyer?: EnrichedEntry;
+  topAsingSeller?: EnrichedEntry;
+  topLokalBuyer?: EnrichedEntry;
+  topLokalSeller?: EnrichedEntry;
+  totalBuy: number;
+}): BrokerNarrative {
+  const {
+    netBSA,
+    netAsing,
+    netLokal,
+    topAsingBuyer,
+    topAsingSeller,
+    topLokalBuyer,
+    topLokalSeller,
+    totalBuy,
+  } = args;
+
+  const fmtPct = (n: number) =>
+    totalBuy > 0 ? `${((Math.abs(n) / totalBuy) * 100).toFixed(0)}%` : "—";
+
+  const parts: string[] = [];
+
+  if (topAsingBuyer && netAsing > 0) {
+    parts.push(
+      `Asing dipimpin ${topAsingBuyer.code} (${topAsingBuyer.info.name}) akum ${fmtIDR(topAsingBuyer.value)} (~${fmtPct(topAsingBuyer.value)} dari total beli)`,
+    );
+  } else if (topAsingSeller && netAsing < 0) {
+    parts.push(
+      `Asing dist dipimpin ${topAsingSeller.code} (${topAsingSeller.info.name}) jual ${fmtIDR(topAsingSeller.value)}`,
+    );
+  } else if (topAsingBuyer || topAsingSeller) {
+    parts.push("Sisi asing campur — beli & jual saling tutup");
+  }
+
+  if (topLokalBuyer && netLokal > 0) {
+    parts.push(
+      `lokal didorong ${topLokalBuyer.code} (${topLokalBuyer.info.name}) +${fmtIDR(topLokalBuyer.value).replace(/^\+/, "")}`,
+    );
+  } else if (topLokalSeller && netLokal < 0) {
+    parts.push(
+      `lokal dist dipimpin ${topLokalSeller.code} (${topLokalSeller.info.name}) ${fmtIDR(topLokalSeller.value)}`,
+    );
+  }
+
+  let label: BrokerNarrative["label"] = "CAMPURAN";
+  let tone: BrokerNarrative["tone"] = "amber";
+  let headline = "Pola broker campur — belum ada driver dominan";
+
+  if (netAsing > 0 && netLokal > 0) {
+    label = "DUA-DUANYA AKUM";
+    tone = "green";
+    headline = "Asing & Lokal sama-sama akumulasi";
+  } else if (netAsing < 0 && netLokal < 0) {
+    label = "DISTRIBUSI";
+    tone = "red";
+    headline = "Asing & Lokal sama-sama distribusi";
+  } else if (Math.abs(netAsing) > Math.abs(netLokal)) {
+    label = "ASING DRIVER";
+    if (netAsing > 0) {
+      tone = "green";
+      headline = "Asing jadi driver utama — akumulasi";
+    } else {
+      tone = "red";
+      headline = "Asing jadi driver — distribusi";
+    }
+  } else if (Math.abs(netLokal) > Math.abs(netAsing)) {
+    label = "LOKAL DRIVER";
+    if (netLokal > 0) {
+      tone = "green";
+      headline = "Lokal jadi driver utama — akumulasi";
+    } else {
+      tone = "red";
+      headline = "Lokal jadi driver — distribusi";
+    }
+  }
+
+  parts.push(
+    `Net Asing ${fmtIDR(netAsing)} • Net Lokal ${fmtIDR(netLokal)} • NBSA ${fmtIDR(netBSA)}`,
+  );
+
+  if (netAsing > 0 && netLokal < 0 && Math.abs(netLokal) > Math.abs(netAsing) * 0.5) {
+    parts.push(
+      "Pola klasik: asing serap di tengah distribusi lokal — bandar asing yang ngangkat.",
+    );
+  } else if (netAsing < 0 && netLokal > 0) {
+    parts.push(
+      "Pola klasik: asing buang ke lokal — hati-hati lokal jadi bag holder.",
+    );
+  }
+
+  return { label, tone, headline, detail: parts.join(". ") + "." };
+}

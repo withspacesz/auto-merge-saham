@@ -4,7 +4,7 @@ import { ResultTable } from "@/components/ResultTable";
 import { SummaryCard } from "@/components/SummaryCard";
 import { BrokerCard } from "@/components/BrokerCard";
 import { mergeInputs, type MergedTable } from "@/lib/merger";
-import { parseBrokerActivity } from "@/lib/parser-broker";
+import { parseBrokerActivity, analyzeBrokerActivity, type BrokerAnalysis } from "@/lib/parser-broker";
 
 type SourceKey = "data" | "nbsa" | "mf" | "rcm" | "broker";
 
@@ -194,9 +194,10 @@ export function HomePage() {
     return mergeInputs(inputs);
   }, [submitted]);
 
-  const brokerActivity = useMemo(() => {
+  const brokerAnalysis = useMemo<BrokerAnalysis | null>(() => {
     if (!submitted) return null;
-    return parseBrokerActivity(submitted.broker ?? "");
+    const parsed = parseBrokerActivity(submitted.broker ?? "");
+    return parsed ? analyzeBrokerActivity(parsed) : null;
   }, [submitted]);
 
   return (
@@ -370,12 +371,12 @@ export function HomePage() {
 
       </div>
 
-      {showResult && (merged || brokerActivity) && submitted && (
+      {showResult && (merged || brokerAnalysis) && submitted && (
         <ResultModal
           merged={merged}
           symbol={symbol}
           filledCount={filledCount}
-          brokerActivity={brokerActivity}
+          brokerAnalysis={brokerAnalysis}
           onClose={handleCloseResult}
         />
       )}
@@ -387,13 +388,13 @@ function ResultModal({
   merged,
   symbol,
   filledCount,
-  brokerActivity,
+  brokerAnalysis,
   onClose,
 }: {
   merged: MergedTable | null;
   symbol: string;
   filledCount: number;
-  brokerActivity: ReturnType<typeof parseBrokerActivity>;
+  brokerAnalysis: BrokerAnalysis | null;
   onClose: () => void;
 }) {
   const outerRef = useRef<HTMLDivElement>(null);
@@ -448,7 +449,7 @@ function ResultModal({
       ro.disconnect();
       window.removeEventListener("resize", recalc);
     };
-  }, [merged, symbol, brokerActivity]);
+  }, [merged, symbol, brokerAnalysis]);
 
   return (
     <div
@@ -495,8 +496,10 @@ function ResultModal({
             }}
             className="space-y-3"
           >
-            {merged && <SummaryCard merged={merged} />}
-            {brokerActivity && <BrokerCard broker={brokerActivity} />}
+            {merged && (
+              <SummaryCard merged={merged} brokerAnalysis={brokerAnalysis} />
+            )}
+            {brokerAnalysis && <BrokerCard analysis={brokerAnalysis} />}
             {merged && <ResultTable merged={merged} symbol={symbol} />}
           </div>
         </div>
