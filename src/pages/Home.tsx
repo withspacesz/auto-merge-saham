@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Calendar, Check, Copy, Hash, X } from "lucide-react";
 import { ResultTable } from "@/components/ResultTable";
 import { SummaryCard } from "@/components/SummaryCard";
@@ -453,6 +453,9 @@ function ResultModal({
   brokerComparison: BrokerComparison | null;
   onClose: () => void;
 }) {
+  const outerRef = useRef<HTMLDivElement>(null);
+  const innerRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
   const [tab, setTab] = useState<"rekomendasi" | "top-broker" | "bandingkan">(
     brokerComparison ? "bandingkan" : "rekomendasi",
   );
@@ -462,6 +465,72 @@ function ResultModal({
     if (!brokerAnalysis && tab === "top-broker") setTab("rekomendasi");
     if (!brokerComparison && tab === "bandingkan") setTab("rekomendasi");
   }, [brokerAnalysis, brokerComparison, tab]);
+
+  useLayoutEffect(() => {
+    const inner = innerRef.current;
+    const outer = outerRef.current;
+    if (!inner || !outer) return;
+
+    const measureAndScale = () => {
+      // Reset transform supaya pengukuran benar di ukuran alami.
+      inner.style.transform = "none";
+      // Force reflow agar measurement memperhitungkan reset transform.
+      void inner.offsetHeight;
+      const naturalH = inner.scrollHeight;
+      const naturalW = inner.scrollWidth;
+      const cs = getComputedStyle(outer);
+      const padT = parseFloat(cs.paddingTop) || 0;
+      const padB = parseFloat(cs.paddingBottom) || 0;
+      const padL = parseFloat(cs.paddingLeft) || 0;
+      const padR = parseFloat(cs.paddingRight) || 0;
+      const availH = outer.clientHeight - padT - padB;
+      const availW = outer.clientWidth - padL - padR;
+      if (naturalH <= 0 || naturalW <= 0 || availH <= 0 || availW <= 0) return;
+      // Margin keamanan 3% supaya pasti fit (browser rounding, scrollbar, dll).
+      const s = Math.min(1, (availW / naturalW) * 0.97, (availH / naturalH) * 0.97);
+      setScale(s);
+    };
+
+    let rafIds: number[] = [];
+    const scheduleRecalc = () => {
+      // Batalkan jadwal sebelumnya.
+      rafIds.forEach((id) => cancelAnimationFrame(id));
+      rafIds = [];
+      // Pengukuran berlapis: setelah layout settle, font load, dll.
+      const r1 = requestAnimationFrame(() => {
+        const r2 = requestAnimationFrame(() => {
+          measureAndScale();
+          // Pengukuran ulang setelah React menerapkan transform baru,
+          // memastikan tidak ada konten yang masih overflow.
+          const r3 = requestAnimationFrame(() => {
+            const r4 = requestAnimationFrame(measureAndScale);
+            rafIds.push(r4);
+          });
+          rafIds.push(r3);
+        });
+        rafIds.push(r2);
+      });
+      rafIds.push(r1);
+    };
+
+    scheduleRecalc();
+
+    const ro = new ResizeObserver(() => scheduleRecalc());
+    ro.observe(outer);
+    ro.observe(inner);
+    window.addEventListener("resize", scheduleRecalc);
+
+    // Re-measure setelah font selesai load — sering bikin konten berubah tinggi.
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(scheduleRecalc).catch(() => {});
+    }
+
+    return () => {
+      rafIds.forEach((id) => cancelAnimationFrame(id));
+      ro.disconnect();
+      window.removeEventListener("resize", scheduleRecalc);
+    };
+  }, [merged, symbol, brokerAnalysis, brokerComparison, tab]);
 
   return (
     <div
@@ -494,8 +563,20 @@ function ResultModal({
           </button>
         </div>
 
-        <div className="flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden px-4 md:px-5 py-3">
-          <div className="space-y-3">
+        <div
+          ref={outerRef}
+          className="flex-1 min-h-0 min-w-0 overflow-hidden px-4 md:px-5 py-3"
+        >
+          <div
+            ref={innerRef}
+            style={{
+              transform: `scale(${scale})`,
+              transformOrigin: "top left",
+              width: "100%",
+              willChange: "transform",
+            }}
+            className="space-y-3"
+          >
             {(merged || brokerAnalysis || brokerComparison) && (
               <div>
                 <div className="flex items-center gap-1 mb-2">
