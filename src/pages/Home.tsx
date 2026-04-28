@@ -601,7 +601,8 @@ function ResultModal({
             style={{
               transform: `translate(${fit.offsetX}px, ${fit.offsetY}px) scale(${fit.scale})`,
               transformOrigin: "top left",
-              width: "100%",
+              width: "max-content",
+              maxWidth: "none",
               willChange: "transform",
             }}
             className="space-y-3"
