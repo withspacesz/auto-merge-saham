@@ -455,7 +455,7 @@ function ResultModal({
 }) {
   const outerRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
-  const [fit, setFit] = useState({ scale: 1, offsetX: 0, offsetY: 0 });
+  const [fit, setFit] = useState({ scale: 1 });
   const [tab, setTab] = useState<"rekomendasi" | "top-broker" | "bandingkan">(
     brokerComparison ? "bandingkan" : "rekomendasi",
   );
@@ -490,9 +490,9 @@ function ResultModal({
       if (naturalH <= 0 || naturalW <= 0 || availH <= 0 || availW <= 0) return;
       // Margin keamanan 8% (lebih agresif) supaya pasti fit di semua zoom level.
       const baseScale = Math.min(1, (availW / naturalW) * 0.92, (availH / naturalH) * 0.92);
-      // Pasang scale dulu (top-left dulu agar pengukuran konsisten), lalu verifikasi
-      // anak terakhir benar-benar fit.
-      inner.style.transformOrigin = "top left";
+      // Pasang scale (origin center) supaya pengukuran verifikasi konsisten
+      // dengan render akhir.
+      inner.style.transformOrigin = "center center";
       inner.style.transform = `scale(${baseScale})`;
       void inner.offsetHeight;
       let finalScale = baseScale;
@@ -512,12 +512,7 @@ function ResultModal({
           }
         }
       }
-      // Hitung offset agar konten ter-center horizontal & vertikal di area outer.
-      const scaledW = naturalW * finalScale;
-      const scaledH = naturalH * finalScale;
-      const offsetX = Math.max(0, (availW - scaledW) / 2);
-      const offsetY = Math.max(0, (availH - scaledH) / 2);
-      setFit({ scale: finalScale, offsetX, offsetY });
+      setFit({ scale: finalScale });
     };
 
     let rafIds: number[] = [];
@@ -594,13 +589,13 @@ function ResultModal({
 
         <div
           ref={outerRef}
-          className="flex-1 min-h-0 min-w-0 overflow-hidden px-4 md:px-5 py-3"
+          className="flex-1 min-h-0 min-w-0 overflow-hidden px-4 md:px-5 py-3 flex items-center justify-center"
         >
           <div
             ref={innerRef}
             style={{
-              transform: `translate(${fit.offsetX}px, ${fit.offsetY}px) scale(${fit.scale})`,
-              transformOrigin: "top left",
+              transform: `scale(${fit.scale})`,
+              transformOrigin: "center center",
               width: "max-content",
               maxWidth: "none",
               willChange: "transform",
