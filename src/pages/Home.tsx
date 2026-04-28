@@ -455,7 +455,7 @@ function ResultModal({
 }) {
   const outerRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(1);
+  const [fit, setFit] = useState({ scale: 1, offsetX: 0, offsetY: 0 });
   const [tab, setTab] = useState<"rekomendasi" | "top-broker" | "bandingkan">(
     brokerComparison ? "bandingkan" : "rekomendasi",
   );
@@ -490,7 +490,9 @@ function ResultModal({
       if (naturalH <= 0 || naturalW <= 0 || availH <= 0 || availW <= 0) return;
       // Margin keamanan 8% (lebih agresif) supaya pasti fit di semua zoom level.
       const baseScale = Math.min(1, (availW / naturalW) * 0.92, (availH / naturalH) * 0.92);
-      // Pasang scale dulu, lalu verifikasi anak terakhir benar-benar fit.
+      // Pasang scale dulu (top-left dulu agar pengukuran konsisten), lalu verifikasi
+      // anak terakhir benar-benar fit.
+      inner.style.transformOrigin = "top left";
       inner.style.transform = `scale(${baseScale})`;
       void inner.offsetHeight;
       let finalScale = baseScale;
@@ -510,7 +512,12 @@ function ResultModal({
           }
         }
       }
-      setScale(finalScale);
+      // Hitung offset agar konten ter-center horizontal & vertikal di area outer.
+      const scaledW = naturalW * finalScale;
+      const scaledH = naturalH * finalScale;
+      const offsetX = Math.max(0, (availW - scaledW) / 2);
+      const offsetY = Math.max(0, (availH - scaledH) / 2);
+      setFit({ scale: finalScale, offsetX, offsetY });
     };
 
     let rafIds: number[] = [];
@@ -592,7 +599,7 @@ function ResultModal({
           <div
             ref={innerRef}
             style={{
-              transform: `scale(${scale})`,
+              transform: `translate(${fit.offsetX}px, ${fit.offsetY}px) scale(${fit.scale})`,
               transformOrigin: "top left",
               width: "100%",
               willChange: "transform",
