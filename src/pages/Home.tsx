@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Calendar, Check, Copy, Hash, X } from "lucide-react";
 import { ResultTable } from "@/components/ResultTable";
 import { SummaryCard } from "@/components/SummaryCard";
@@ -453,9 +453,6 @@ function ResultModal({
   brokerComparison: BrokerComparison | null;
   onClose: () => void;
 }) {
-  const outerRef = useRef<HTMLDivElement>(null);
-  const innerRef = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(1);
   const [tab, setTab] = useState<"rekomendasi" | "top-broker" | "bandingkan">(
     brokerComparison ? "bandingkan" : "rekomendasi",
   );
@@ -465,56 +462,6 @@ function ResultModal({
     if (!brokerAnalysis && tab === "top-broker") setTab("rekomendasi");
     if (!brokerComparison && tab === "bandingkan") setTab("rekomendasi");
   }, [brokerAnalysis, brokerComparison, tab]);
-
-  useLayoutEffect(() => {
-    const inner = innerRef.current;
-    const outer = outerRef.current;
-    if (!inner || !outer) return;
-
-    let raf1 = 0;
-    let raf2 = 0;
-
-    const recalc = () => {
-      // Reset transform supaya pengukuran benar di ukuran alami.
-      inner.style.transform = "none";
-      // Force reflow agar offsetHeight memperhitungkan perubahan transform.
-      void inner.offsetHeight;
-      const naturalH = inner.scrollHeight;
-      const naturalW = inner.scrollWidth;
-      // clientHeight/clientWidth termasuk padding — kurangi padding supaya
-      // dapat content box yang sebenarnya, kalau tidak konten bisa overflow.
-      const cs = getComputedStyle(outer);
-      const padT = parseFloat(cs.paddingTop) || 0;
-      const padB = parseFloat(cs.paddingBottom) || 0;
-      const padL = parseFloat(cs.paddingLeft) || 0;
-      const padR = parseFloat(cs.paddingRight) || 0;
-      const availH = outer.clientHeight - padT - padB;
-      const availW = outer.clientWidth - padL - padR;
-      if (naturalH === 0 || naturalW === 0 || availH <= 0 || availW <= 0)
-        return;
-      // Beri sedikit margin keamanan (0.5%) supaya tidak ada 1-2 px sisa.
-      const s = Math.min(1, (availW / naturalW) * 0.995, (availH / naturalH) * 0.995);
-      setScale(s);
-    };
-
-    // Dua RAF supaya layout sudah benar-benar settle (font, gambar, dll).
-    raf1 = requestAnimationFrame(() => {
-      raf2 = requestAnimationFrame(recalc);
-    });
-
-    const ro = new ResizeObserver(() => {
-      recalc();
-    });
-    ro.observe(outer);
-    ro.observe(inner);
-    window.addEventListener("resize", recalc);
-    return () => {
-      cancelAnimationFrame(raf1);
-      cancelAnimationFrame(raf2);
-      ro.disconnect();
-      window.removeEventListener("resize", recalc);
-    };
-  }, [merged, symbol, brokerAnalysis, brokerComparison, tab]);
 
   return (
     <div
@@ -547,20 +494,8 @@ function ResultModal({
           </button>
         </div>
 
-        <div
-          ref={outerRef}
-          className="flex-1 min-h-0 min-w-0 overflow-hidden px-4 md:px-5 py-3"
-        >
-          <div
-            ref={innerRef}
-            style={{
-              transform: `scale(${scale})`,
-              transformOrigin: "top left",
-              width: "100%",
-              willChange: "transform",
-            }}
-            className="space-y-3"
-          >
+        <div className="flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden px-4 md:px-5 py-3">
+          <div className="space-y-3">
             {(merged || brokerAnalysis || brokerComparison) && (
               <div>
                 <div className="flex items-center gap-1 mb-2">
