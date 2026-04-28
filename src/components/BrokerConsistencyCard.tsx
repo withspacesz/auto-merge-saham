@@ -276,39 +276,59 @@ function buildAccumulationCandidates(
 function CandidateRow({ c }: { c: Candidate }) {
   const e = c.entry;
   const avgLine: string[] = [];
-  if (e.weeklyAvg) avgLine.push(`Avg beli mingguan ${e.weeklyAvg}`);
-  if (e.dailyAvg) avgLine.push(`Avg beli harian ${e.dailyAvg}`);
+  if (e.weeklyAvg) avgLine.push(`Avg mingguan ${e.weeklyAvg}`);
+  if (e.dailyAvg) avgLine.push(`Avg harian ${e.dailyAvg}`);
+
+  // Warna ring peringkat: 1=gold, 2=silver, 3=bronze, 4+=slate
+  const rankRing =
+    c.rank === 1
+      ? "bg-amber-500/25 border-amber-400/60 text-amber-200"
+      : c.rank === 2
+        ? "bg-slate-300/15 border-slate-300/50 text-slate-100"
+        : c.rank === 3
+          ? "bg-orange-700/25 border-orange-500/50 text-orange-200"
+          : "bg-slate-500/15 border-slate-500/40 text-slate-300";
 
   return (
-    <div className="flex gap-3 rounded-lg border border-white/10 bg-white/[0.02] p-3">
-      <div className="flex-shrink-0">
-        <div className="w-7 h-7 rounded-full bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-300 text-xs font-bold">
+    <div className="rounded-lg border border-white/10 bg-white/[0.02] hover:bg-white/[0.04] transition-colors p-3 md:p-3.5">
+      {/* Baris atas: peringkat | kode + nama | badges | avg */}
+      <div className="flex items-center gap-3 flex-wrap md:flex-nowrap">
+        <div
+          className={`flex-shrink-0 w-9 h-9 rounded-full border flex items-center justify-center text-sm font-bold ${rankRing}`}
+        >
           {c.rank}
         </div>
-      </div>
-      <div className="flex-1 min-w-0 space-y-1.5">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xl font-extrabold text-white">{e.code}</span>
-          <span className="text-[11px] text-slate-400 truncate">{e.info.name}</span>
+
+        <div className="flex items-baseline gap-2 min-w-0 md:w-44 flex-shrink-0">
+          <span className="text-xl md:text-2xl font-extrabold text-white tracking-tight">
+            {e.code}
+          </span>
+          <span className="text-[11px] md:text-xs text-slate-400 truncate">
+            {e.info.name}
+          </span>
         </div>
-        <div className="flex items-center gap-1.5 flex-wrap">
+
+        <div className="flex items-center gap-1.5 flex-wrap flex-1 min-w-0">
           {c.badges.map((b, i) => (
             <span
               key={i}
-              className={`inline-flex items-center px-2 py-0.5 rounded border text-[11px] font-semibold ${BADGE_CLS[b.tone]}`}
+              className={`inline-flex items-center px-2 py-0.5 rounded border text-[11px] md:text-xs font-semibold whitespace-nowrap ${BADGE_CLS[b.tone]}`}
             >
               {b.text}
             </span>
           ))}
         </div>
+
         {avgLine.length > 0 && (
-          <div className="text-[11px] text-slate-400 font-mono">
+          <div className="text-[11px] md:text-xs text-slate-400 font-mono whitespace-nowrap md:text-right md:ml-auto">
             {avgLine.join(" · ")}
           </div>
         )}
-        <div className="text-[12px] text-slate-200 leading-relaxed">
-          {c.narrative}
-        </div>
+      </div>
+
+      {/* Baris bawah: narasi, indented sejajar kode (skip lebar peringkat) */}
+      <div className="mt-2 md:pl-12 text-[13px] md:text-sm text-slate-200 leading-relaxed">
+        {c.narrative}
       </div>
     </div>
   );
@@ -354,7 +374,7 @@ export function BrokerConsistencyCard({
             Belum ada kandidat akumulasi yang terdeteksi.
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+          <div className="flex flex-col gap-2">
             {candidates.map((c) => <CandidateRow key={c.entry.code} c={c} />)}
           </div>
         )}
