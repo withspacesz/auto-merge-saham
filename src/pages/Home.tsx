@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Calendar, Check, Copy, Hash, X } from "lucide-react";
 import { ResultTable } from "@/components/ResultTable";
 import { SummaryCard } from "@/components/SummaryCard";
@@ -463,6 +463,55 @@ function ResultModal({
     if (!brokerComparison && tab === "bandingkan") setTab("rekomendasi");
   }, [brokerAnalysis, brokerComparison, tab]);
 
+  // Auto-fit: kecilkan konten supaya muat tinggi modal tanpa scroll,
+  // tapi lebar visualnya tetap penuh sesuai header.
+  const outerRef = useRef<HTMLDivElement | null>(null);
+  const innerRef = useRef<HTMLDivElement | null>(null);
+  const [scale, setScale] = useState(1);
+
+  useLayoutEffect(() => {
+    const outer = outerRef.current;
+    const inner = innerRef.current;
+    if (!outer || !inner) return;
+
+    const fit = () => {
+      // Reset ke ukuran natural untuk diukur ulang.
+      inner.style.transform = "none";
+      inner.style.width = "100%";
+      // Paksa reflow.
+      void inner.offsetHeight;
+
+      const cs = getComputedStyle(outer);
+      const padT = parseFloat(cs.paddingTop) || 0;
+      const padB = parseFloat(cs.paddingBottom) || 0;
+      const availH = outer.clientHeight - padT - padB;
+      const naturalH = inner.scrollHeight;
+
+      if (naturalH <= 0 || availH <= 0) return;
+
+      if (naturalH <= availH) {
+        setScale(1);
+        return;
+      }
+
+      // Pakai margin keamanan kecil supaya tidak kepotong.
+      const next = Math.max(0.4, Math.min(1, (availH / naturalH) * 0.98));
+      setScale(next);
+    };
+
+    const raf = requestAnimationFrame(() => requestAnimationFrame(fit));
+    const ro = new ResizeObserver(fit);
+    ro.observe(outer);
+    ro.observe(inner);
+    window.addEventListener("resize", fit);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+      window.removeEventListener("resize", fit);
+    };
+  }, [merged, symbol, brokerAnalysis, brokerComparison, tab]);
+
   return (
     <div
       role="dialog"
@@ -495,9 +544,19 @@ function ResultModal({
         </div>
 
         <div
-          className="flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden px-4 md:px-5 py-3"
+          ref={outerRef}
+          className="flex-1 min-h-0 min-w-0 overflow-hidden px-4 md:px-5 py-3"
         >
-          <div className="space-y-3 w-full">
+          <div
+            ref={innerRef}
+            style={{
+              transform: `scale(${scale})`,
+              transformOrigin: "top left",
+              width: scale < 1 ? `${100 / scale}%` : "100%",
+              willChange: "transform",
+            }}
+            className="space-y-3"
+          >
             {(merged || brokerAnalysis || brokerComparison) && (
               <div>
                 <div className="flex items-center gap-1 mb-2">
