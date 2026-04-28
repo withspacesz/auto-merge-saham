@@ -850,7 +850,7 @@ function RecommendationBanner({
           <div className={`text-sm md:text-base font-bold mt-1 ${TONE_TEXT[tone]}`}>
             {headline}
           </div>
-          <p className="text-[11px] md:text-xs text-muted-foreground mt-1 leading-relaxed">
+          <p className="text-[11px] md:text-xs text-muted-foreground mt-1 leading-relaxed max-w-[680px]">
             {detail}
           </p>
           {reasons.length > 0 && (
