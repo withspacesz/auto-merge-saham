@@ -2,9 +2,11 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Calendar, Check, Copy, Hash, X } from "lucide-react";
 import { ResultTable } from "@/components/ResultTable";
 import { SummaryCard } from "@/components/SummaryCard";
+import { BrokerCard } from "@/components/BrokerCard";
 import { mergeInputs, type MergedTable } from "@/lib/merger";
+import { parseBrokerActivity } from "@/lib/parser-broker";
 
-type SourceKey = "data" | "nbsa" | "mf" | "rcm";
+type SourceKey = "data" | "nbsa" | "mf" | "rcm" | "broker";
 
 const SOURCES: { key: SourceKey; label: string; tag: string; cmdBase: string; hint: string }[] = [
   {
@@ -34,6 +36,13 @@ const SOURCES: { key: SourceKey; label: string; tag: string; cmdBase: string; hi
     tag: "REKAP CLEAN MONEY",
     cmdBase: "/rcm",
     hint: "Paste data Rekap Clean Money (kolom: Date, Tx, Avp P, Gain%, Value, Smart M., Bad M., Clean M., RCV)",
+  },
+  {
+    key: "broker",
+    label: "Broker Activity",
+    tag: "BROKER",
+    cmdBase: "/broker",
+    hint: "Paste data Broker Summary dari @chart_saham_bot — hari terakhir saja (NET BUY / NET SELL)",
   },
 ];
 
@@ -97,6 +106,24 @@ dari tanggal 17-4-2026 s/d 24-4-2026
 17-04-2026 15x    96  -8.82   8.00M   96.45Jt   -2.65M     -2.55M 🔴  -88
 -------------------------------------------------------------------------➕
            40x    93  -2.20  23.00M    1.33M    -4.09M    -2.76M 🔴  -264`,
+  broker: `/BROKER 🗓28-04-2026 || ⏰09:08:57 Wib. ®️@chart_saham_bot
+Halo Kak Bang Tra🥰, Berikut adalah Data
+          Broker Summary ESIP  Regular Board (RG)
+            Tanggal 2026-04-24 s.d 2026-04-24
+-----------------------------------------------------------------------
+   🟩🟩🟩🟩 NET BUY 🟩🟩🟩🟩      🟥🟥🟥🟥 NET SELL 🟥🟥🟥🟥
+ No|KODE|B.Val| B.Lot| B.Fq| B.Avg| No|KODE| S.Val| S.Lot| S.fq| S.Avg|
+-----------------------------------------------------------------------
+ 1. KK 211.5Jt  23.9rb 137      89   1. XL -236.7Jt -26.8rb   1rb    89
+ 2. GR 132.4Jt  14.9rb  32      89   2. MG -49.5Jt  -5.6rb  24      88
+ 3. BK  43.9Jt   4.9rb  35      89   3. SQ -45.4Jt  -5.1rb 101      88
+ 4. YB  22.6Jt   2.7rb  28      88   4. YP -38.1Jt  -4.3rb  63      89
+ 5. NI  19.7Jt   2.2rb  22      89   5. CC -35.6Jt  -3.9rb 143      89
+ 6. AK  18.6Jt   2.2rb  26      89   6. CP -19.8Jt  -2.2rb  13      90
+ 7. OD   5.9Jt 668.0    28      89   7. XC -17.9Jt  -2.0rb 105      89
+ 8. ZP   4.4Jt 499.0     1      88   8. PD -10.4Jt  -1.3rb  71      88
+ 9. BQ   4.3Jt 485.0     7      89   9. XA  -8.9Jt  -1.0rb   3      89
+10. AZ   2.7Jt 305.0     4      87  10. EP  -7.3Jt -826.0     5      88`,
 };
 
 type Mode = "candle" | "tanggal";
@@ -113,6 +140,7 @@ export function HomePage() {
     nbsa: "",
     mf: "",
     rcm: "",
+    broker: "",
   });
   const [submitted, setSubmitted] = useState<Record<SourceKey, string> | null>(null);
   const [showResult, setShowResult] = useState(false);
@@ -125,7 +153,7 @@ export function HomePage() {
   };
 
   const handleReset = () => {
-    setData({ data: "", nbsa: "", mf: "", rcm: "" });
+    setData({ data: "", nbsa: "", mf: "", rcm: "", broker: "" });
     setSubmitted(null);
     setSymbol("");
     setShowResult(false);
@@ -157,8 +185,18 @@ export function HomePage() {
 
   const { merged } = useMemo(() => {
     if (!submitted) return { merged: null };
-    const inputs = SOURCES.map((s) => ({ key: s.key, text: submitted[s.key] ?? "" }));
+    // Broker activity punya format khusus (2 kolom NET BUY/NET SELL),
+    // tidak ikut di-merge ke tabel utama — diparse terpisah utk BrokerCard.
+    const inputs = SOURCES.filter((s) => s.key !== "broker").map((s) => ({
+      key: s.key,
+      text: submitted[s.key] ?? "",
+    }));
     return mergeInputs(inputs);
+  }, [submitted]);
+
+  const brokerActivity = useMemo(() => {
+    if (!submitted) return null;
+    return parseBrokerActivity(submitted.broker ?? "");
   }, [submitted]);
 
   return (
@@ -332,11 +370,12 @@ export function HomePage() {
 
       </div>
 
-      {showResult && merged && submitted && (
+      {showResult && (merged || brokerActivity) && submitted && (
         <ResultModal
           merged={merged}
           symbol={symbol}
           filledCount={filledCount}
+          brokerActivity={brokerActivity}
           onClose={handleCloseResult}
         />
       )}
@@ -348,11 +387,13 @@ function ResultModal({
   merged,
   symbol,
   filledCount,
+  brokerActivity,
   onClose,
 }: {
-  merged: MergedTable;
+  merged: MergedTable | null;
   symbol: string;
   filledCount: number;
+  brokerActivity: ReturnType<typeof parseBrokerActivity>;
   onClose: () => void;
 }) {
   const outerRef = useRef<HTMLDivElement>(null);
@@ -407,7 +448,7 @@ function ResultModal({
       ro.disconnect();
       window.removeEventListener("resize", recalc);
     };
-  }, [merged, symbol]);
+  }, [merged, symbol, brokerActivity]);
 
   return (
     <div
@@ -454,8 +495,9 @@ function ResultModal({
             }}
             className="space-y-3"
           >
-            <SummaryCard merged={merged} />
-            <ResultTable merged={merged} symbol={symbol} />
+            {merged && <SummaryCard merged={merged} />}
+            {brokerActivity && <BrokerCard broker={brokerActivity} />}
+            {merged && <ResultTable merged={merged} symbol={symbol} />}
           </div>
         </div>
       </div>
