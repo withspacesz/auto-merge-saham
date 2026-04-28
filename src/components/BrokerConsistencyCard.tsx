@@ -403,14 +403,12 @@ function ControllerRow({ c }: { c: Controller }) {
       : c.todayStatus === "pause"
         ? "bg-amber-500/20 text-amber-200 border-amber-500/40"
         : "bg-rose-500/25 text-rose-200 border-rose-500/50";
-  const statusIcon =
-    c.todayStatus === "lanjut" ? "✅" : c.todayStatus === "pause" ? "⏸" : "🚨";
   const statusLabel =
     c.todayStatus === "lanjut"
-      ? "Lanjut akum"
+      ? "Akumulasi"
       : c.todayStatus === "pause"
-        ? "Pause / hold"
-        : "Berbalik jual";
+        ? "Hold"
+        : "Berbalik Jual";
 
   const rankRing =
     c.rank === 1
@@ -420,33 +418,58 @@ function ControllerRow({ c }: { c: Controller }) {
         : "bg-emerald-500/10 border-emerald-400/30 text-emerald-300";
 
   return (
-    <div className="rounded-lg border border-emerald-500/15 bg-emerald-500/[0.04] p-3">
-      <div className="flex items-center gap-3 flex-wrap">
+    <div className="rounded-lg border border-emerald-500/15 bg-emerald-500/[0.04] p-2.5">
+      {/* Baris 1: rank · code · name · status */}
+      <div className="flex items-center gap-2 mb-1.5">
         <div
-          className={`flex-shrink-0 w-8 h-8 rounded-full border flex items-center justify-center text-sm font-bold ${rankRing}`}
+          className={`flex-shrink-0 w-7 h-7 rounded-full border flex items-center justify-center text-xs font-bold ${rankRing}`}
         >
           {c.rank}
         </div>
-        <div className="flex items-baseline gap-2 min-w-0">
-          <span className="text-xl font-extrabold text-white tracking-tight">{e.code}</span>
-          <span className="text-[11px] md:text-xs text-slate-400 truncate max-w-[180px]">{e.info.name}</span>
-        </div>
-        <span className="inline-flex items-center px-2 py-0.5 rounded border text-[11px] md:text-xs font-semibold bg-emerald-500/20 text-emerald-200 border-emerald-500/40 whitespace-nowrap">
+        <span className="text-lg md:text-xl font-extrabold text-white tracking-tight">
+          {e.code}
+        </span>
+        <span className="text-[11px] text-slate-400 truncate min-w-0 flex-1">
+          {e.info.name}
+        </span>
+        <span
+          className={`flex-shrink-0 inline-flex items-center px-2 py-0.5 rounded border text-[11px] font-bold uppercase tracking-wider whitespace-nowrap ${statusCls}`}
+        >
+          {statusLabel}
+        </span>
+      </div>
+
+      {/* Baris 2: detail mingguan + harian */}
+      <div className="md:pl-9 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px]">
+        <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-200 border border-emerald-500/30 font-semibold whitespace-nowrap">
           Mingguan {fmtIDR(e.weeklyValue)}
         </span>
         {e.weeklyAvg && (
-          <span className="text-[11px] md:text-xs text-slate-400 font-mono whitespace-nowrap">
+          <span className="text-slate-400 font-mono whitespace-nowrap">
             avg {e.weeklyAvg}
           </span>
         )}
-        <span
-          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[11px] md:text-xs font-semibold whitespace-nowrap ml-auto ${statusCls}`}
-        >
-          {statusIcon} {statusLabel}
-        </span>
-      </div>
-      <div className="mt-2 md:pl-11 text-[13px] md:text-sm text-slate-200 leading-relaxed">
-        {c.todayDetail}
+        <span className="text-slate-500">·</span>
+        {e.dailyValue !== 0 ? (
+          <span
+            className={`inline-flex items-center px-1.5 py-0.5 rounded border font-semibold whitespace-nowrap ${
+              e.dailyValue > 0
+                ? "bg-emerald-500/15 text-emerald-200 border-emerald-500/30"
+                : "bg-rose-500/15 text-rose-200 border-rose-500/30"
+            }`}
+          >
+            Hari ini {fmtIDR(e.dailyValue)}
+          </span>
+        ) : (
+          <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-slate-500/15 text-slate-300 border border-slate-500/30 font-semibold whitespace-nowrap">
+            Hari ini tidak aktif
+          </span>
+        )}
+        {e.dailyAvg && e.dailyValue !== 0 && (
+          <span className="text-slate-400 font-mono whitespace-nowrap">
+            @ {e.dailyAvg}
+          </span>
+        )}
       </div>
     </div>
   );
@@ -502,47 +525,58 @@ function DistributorRow({ d }: { d: Distributor }) {
       : d.severity === "sedang"
         ? "bg-rose-500/15 text-rose-200 border-rose-500/35"
         : "bg-rose-500/10 text-rose-300 border-rose-500/25";
-  const sevLabel = d.severity === "berat" ? "BAHAYA" : d.severity === "sedang" ? "SEDANG" : "RINGAN";
-  const dailyTone =
-    e.dailyValue < 0
-      ? "bg-rose-500/20 text-rose-200 border-rose-500/40"
-      : e.dailyValue === 0
-        ? "bg-slate-500/20 text-slate-300 border-slate-500/40"
-        : "bg-emerald-500/20 text-emerald-200 border-emerald-500/40";
-  const dailyText =
-    e.dailyValue < 0
-      ? `Hari ini jual ${fmtIDR(e.dailyValue)}`
-      : e.dailyValue === 0
-        ? "Hari ini tidak aktif"
-        : `Hari ini balik beli ${fmtIDR(e.dailyValue)}`;
+  const sevLabel =
+    d.severity === "berat" ? "Bahaya" : d.severity === "sedang" ? "Sedang" : "Ringan";
 
   return (
-    <div className="rounded-lg border border-rose-500/20 bg-rose-500/[0.04] p-3">
-      <div className="flex items-center gap-3 flex-wrap">
-        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-rose-500/20 border border-rose-500/50 flex items-center justify-center text-rose-200 text-sm font-bold">
+    <div className="rounded-lg border border-rose-500/15 bg-rose-500/[0.04] p-2.5">
+      {/* Baris 1: rank · code · name · severity */}
+      <div className="flex items-center gap-2 mb-1.5">
+        <div className="flex-shrink-0 w-7 h-7 rounded-full bg-rose-500/20 border border-rose-500/50 flex items-center justify-center text-rose-200 text-xs font-bold">
           {d.rank}
         </div>
-        <div className="flex items-baseline gap-2 min-w-0">
-          <span className="text-xl font-extrabold text-white tracking-tight">{e.code}</span>
-          <span className="text-[11px] md:text-xs text-slate-400 truncate max-w-[180px]">{e.info.name}</span>
-        </div>
-        <span className={`inline-flex items-center px-2 py-0.5 rounded border text-[11px] md:text-xs font-bold uppercase tracking-wider whitespace-nowrap ${sevCls}`}>
+        <span className="text-lg md:text-xl font-extrabold text-white tracking-tight">
+          {e.code}
+        </span>
+        <span className="text-[11px] text-slate-400 truncate min-w-0 flex-1">
+          {e.info.name}
+        </span>
+        <span
+          className={`flex-shrink-0 inline-flex items-center px-2 py-0.5 rounded border text-[11px] font-bold uppercase tracking-wider whitespace-nowrap ${sevCls}`}
+        >
           {sevLabel}
         </span>
-        <span className="inline-flex items-center px-2 py-0.5 rounded border text-[11px] md:text-xs font-semibold bg-rose-500/20 text-rose-200 border-rose-500/40 whitespace-nowrap">
+      </div>
+
+      {/* Baris 2: detail mingguan + harian */}
+      <div className="md:pl-9 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px]">
+        <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-rose-500/15 text-rose-200 border border-rose-500/30 font-semibold whitespace-nowrap">
           Mingguan {fmtIDR(e.weeklyValue)}
         </span>
         {e.weeklyAvg && (
-          <span className="text-[11px] md:text-xs text-slate-400 font-mono whitespace-nowrap">
+          <span className="text-slate-400 font-mono whitespace-nowrap">
             avg {e.weeklyAvg}
           </span>
         )}
-        <span className={`inline-flex items-center px-2 py-0.5 rounded border text-[11px] md:text-xs font-semibold whitespace-nowrap ml-auto ${dailyTone}`}>
-          {dailyText}
-        </span>
-      </div>
-      <div className="mt-2 md:pl-11 text-[13px] md:text-sm text-slate-200 leading-relaxed">
-        {d.detail}
+        <span className="text-slate-500">·</span>
+        {e.dailyValue < 0 ? (
+          <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-rose-500/15 text-rose-200 border border-rose-500/30 font-semibold whitespace-nowrap">
+            Hari ini {fmtIDR(e.dailyValue)}
+          </span>
+        ) : e.dailyValue === 0 ? (
+          <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-slate-500/15 text-slate-300 border border-slate-500/30 font-semibold whitespace-nowrap">
+            Hari ini tidak aktif
+          </span>
+        ) : (
+          <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-200 border border-emerald-500/30 font-semibold whitespace-nowrap">
+            Hari ini balik beli {fmtIDR(e.dailyValue)}
+          </span>
+        )}
+        {e.dailyAvg && e.dailyValue !== 0 && (
+          <span className="text-slate-400 font-mono whitespace-nowrap">
+            @ {e.dailyAvg}
+          </span>
+        )}
       </div>
     </div>
   );
@@ -599,13 +633,29 @@ export function BrokerConsistencyCard({
   const controllers = buildControllers(analysis);
   const distributors = buildTopDistributors(analysis);
 
-  // Footer: jualan melemah (yang sudah berhenti / kemungkinan distribusi selesai)
-  const stoppedDist = analysis.stoppedDist.slice(0, 6);
-  // Codes yang sudah dipromosikan ke section utama (jangan duplikasi di footer)
+  // Chip "kandidat lain" = broker akumulasi yang BUKAN controller (anti-duplikasi)
+  const controllerCodes = new Set(controllers.map((c) => c.entry.code));
+  const akumPool: ConsistencyEntry[] = [
+    ...analysis.konsistenAkum,
+    ...analysis.selesaiAkum,
+    ...analysis.newOrFlipAkum,
+  ].filter((e) => e.weeklyValue > 0 && !controllerCodes.has(e.code));
+  // De-dup berdasarkan code (entry bisa muncul di beberapa pool)
+  const akumChipsMap = new Map<string, ConsistencyEntry>();
+  for (const e of akumPool) if (!akumChipsMap.has(e.code)) akumChipsMap.set(e.code, e);
+  const akumChips = Array.from(akumChipsMap.values())
+    .sort((a, b) => b.weeklyValue - a.weeklyValue)
+    .slice(0, 8);
+
+  // Distributor lain (yang bukan top 3) + jualan melemah
   const promotedCodes = new Set(distributors.map((d) => d.entry.code));
   const remainingDist = analysis.konsistenDist
     .filter((e) => !promotedCodes.has(e.code))
     .slice(0, 6);
+  const stoppedDist = analysis.stoppedDist.slice(0, 6);
+
+  // Suppress unused warning untuk candidates (masih dihitung utk konsistensi tipe)
+  void candidates;
 
   return (
     <div className="rounded-xl border border-border bg-card overflow-hidden">
@@ -625,82 +675,136 @@ export function BrokerConsistencyCard({
         </span>
       </div>
 
-      <div className="p-3 space-y-4">
-        {/* LAPIS 1 + 2: Controller mingguan dengan konfirmasi harian */}
-        {controllers.length > 0 && (
-          <section className="space-y-2">
-            <SectionHeader
-              badge="Lapis 1 + 2"
-              title={`Controller Mingguan & Konfirmasi Hari Ini`}
-              subtitle="siapa yang in control + apa yang mereka lakukan harian"
-              tone="emerald"
-            />
+      {/* Dashboard 2 kolom: Akumulasi vs Distribusi */}
+      <div className="p-3 grid grid-cols-1 lg:grid-cols-2 gap-3">
+        {/* === KOLOM KIRI: AKUMULASI === */}
+        <section className="space-y-2 rounded-lg border border-emerald-500/15 bg-emerald-500/[0.02] p-2.5">
+          <div className="flex items-baseline justify-between gap-2 px-1">
+            <div className="flex items-baseline gap-2">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-300">
+                Akumulasi
+              </span>
+              <h4 className="text-sm font-bold text-foreground">Controller Mingguan</h4>
+            </div>
+            <span className="text-[10px] text-muted-foreground">
+              + konfirmasi hari ini
+            </span>
+          </div>
+
+          {controllers.length > 0 ? (
             <div className="flex flex-col gap-2">
               {controllers.map((c) => <ControllerRow key={c.entry.code} c={c} />)}
             </div>
-          </section>
-        )}
-
-        {/* Kandidat Terkuat (leaderboard detail) */}
-        {candidates.length > 0 && (
-          <section className="space-y-2">
-            <SectionHeader
-              badge="Kandidat"
-              title={`Kandidat Terkuat yang Akumulasi ${symbol}`}
-              subtitle="pool lengkap broker yang lagi serap, dengan narasi per broker"
-              tone="amber"
-            />
-            <div className="flex flex-col gap-2">
-              {candidates.map((c) => <CandidateRow key={c.entry.code} c={c} />)}
+          ) : (
+            <div className="text-[12px] text-muted-foreground italic px-1 py-2">
+              Belum ada controller akumulasi terdeteksi.
             </div>
-          </section>
-        )}
+          )}
 
-        {/* Distributor Terbesar — highlight bahaya */}
-        {distributors.length > 0 && (
-          <section className="space-y-2">
-            <SectionHeader
-              badge="Bahaya"
-              title="Distributor Terbesar"
-              subtitle="kalau belum berhenti, akumulasi bisa terus diserap tanpa harga naik"
-              tone="rose"
-            />
+          {/* Chip kandidat lain (yang bukan controller) */}
+          {akumChips.length > 0 && (
+            <div className="pt-1.5 border-t border-emerald-500/10">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-300/80 mb-1">
+                Kandidat lain
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {akumChips.map((e) => (
+                  <span
+                    key={e.code}
+                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[11px] font-mono bg-emerald-500/10 text-emerald-200 border-emerald-500/25 whitespace-nowrap"
+                    title={`${e.info.name}${e.weeklyAvg ? ` · avg ${e.weeklyAvg}` : ""}`}
+                  >
+                    <span className="font-bold">{e.code}</span>
+                    <span className="text-emerald-300/80">{fmtIDR(e.weeklyValue)}</span>
+                    {e.weeklyAvg && (
+                      <span className="text-slate-400">@{e.weeklyAvg}</span>
+                    )}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
+
+        {/* === KOLOM KANAN: DISTRIBUSI === */}
+        <section className="space-y-2 rounded-lg border border-rose-500/15 bg-rose-500/[0.02] p-2.5">
+          <div className="flex items-baseline justify-between gap-2 px-1">
+            <div className="flex items-baseline gap-2">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-rose-300">
+                Distribusi
+              </span>
+              <h4 className="text-sm font-bold text-foreground">Distributor Terbesar</h4>
+            </div>
+            <span className="text-[10px] text-muted-foreground">
+              kalau belum berhenti, akum diserap
+            </span>
+          </div>
+
+          {distributors.length > 0 ? (
             <div className="flex flex-col gap-2">
               {distributors.map((d) => <DistributorRow key={d.entry.code} d={d} />)}
             </div>
-          </section>
-        )}
+          ) : (
+            <div className="text-[12px] text-muted-foreground italic px-1 py-2">
+              Belum ada distributor signifikan terdeteksi.
+            </div>
+          )}
 
-        {/* Footer ringkas */}
-        {(remainingDist.length > 0 || stoppedDist.length > 0) && (
-          <div className="pt-3 border-t border-border/60 space-y-1.5">
-            {remainingDist.length > 0 && (
-              <div className="text-[12px] md:text-[13px]">
-                <span className="font-bold text-rose-300/80 uppercase tracking-wider text-[10px] md:text-[11px]">
-                  🟥 Distributor lain:
-                </span>{" "}
-                <span className="text-foreground/80 font-mono">
-                  {remainingDist.map((e) => `${e.code} ${fmtIDR(e.weeklyValue)}`).join(", ")}
-                </span>
-              </div>
-            )}
-            {stoppedDist.length > 0 && (
-              <div className="text-[12px] md:text-[13px]">
-                <span className="font-bold text-amber-300 uppercase tracking-wider text-[10px] md:text-[11px]">
-                  📉 Jualan melemah:
-                </span>{" "}
-                <span className="text-foreground/90 font-mono">
-                  {stoppedDist.map((e) => `${e.code} ${fmtIDR(e.weeklyValue)}`).join(", ")}
-                </span>
-              </div>
-            )}
-          </div>
-        )}
+          {/* Chip distributor lain + jualan melemah */}
+          {(remainingDist.length > 0 || stoppedDist.length > 0) && (
+            <div className="pt-1.5 border-t border-rose-500/10 space-y-1.5">
+              {remainingDist.length > 0 && (
+                <div>
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-rose-300/80 mb-1">
+                    Distributor lain
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {remainingDist.map((e) => (
+                      <span
+                        key={e.code}
+                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[11px] font-mono bg-rose-500/10 text-rose-200 border-rose-500/25 whitespace-nowrap"
+                        title={`${e.info.name}${e.weeklyAvg ? ` · avg ${e.weeklyAvg}` : ""}`}
+                      >
+                        <span className="font-bold">{e.code}</span>
+                        <span className="text-rose-300/80">{fmtIDR(e.weeklyValue)}</span>
+                        {e.weeklyAvg && (
+                          <span className="text-slate-400">@{e.weeklyAvg}</span>
+                        )}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {stoppedDist.length > 0 && (
+                <div>
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-amber-300/90 mb-1">
+                    Jualan melemah
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {stoppedDist.map((e) => (
+                      <span
+                        key={e.code}
+                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[11px] font-mono bg-amber-500/10 text-amber-200 border-amber-500/25 whitespace-nowrap"
+                        title={`${e.info.name}${e.weeklyAvg ? ` · avg ${e.weeklyAvg}` : ""}`}
+                      >
+                        <span className="font-bold">{e.code}</span>
+                        <span className="text-amber-300/80">{fmtIDR(e.weeklyValue)}</span>
+                        {e.weeklyAvg && (
+                          <span className="text-slate-400">@{e.weeklyAvg}</span>
+                        )}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </section>
 
-        {/* Empty state */}
-        {controllers.length === 0 && candidates.length === 0 && distributors.length === 0 && (
-          <div className="text-xs text-muted-foreground italic px-1 py-2">
-            Belum ada pola controller / akumulasi / distributor yang terdeteksi.
+        {/* Empty state global */}
+        {controllers.length === 0 && distributors.length === 0 && akumChips.length === 0 && (
+          <div className="lg:col-span-2 text-xs text-muted-foreground italic px-1 py-2">
+            Belum ada pola akumulasi / distribusi yang terdeteksi.
           </div>
         )}
       </div>
