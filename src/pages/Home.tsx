@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Calendar, Check, Copy, Hash, X } from "lucide-react";
 import { ResultTable } from "@/components/ResultTable";
 import { SummaryCard } from "@/components/SummaryCard";
@@ -478,99 +478,11 @@ function ResultModal({
     if (!brokerComparison && tab === "bandingkan") setTab("rekomendasi");
   }, [brokerAnalysis, brokerComparison, tab]);
 
-  // Auto-fit imperatif: terus pantau ukuran konten dan skalakan supaya
-  // muat tinggi modal tanpa scroll, sambil mempertahankan lebar visual
-  // 100% (sama dengan header).
+  // Konten ditampilkan ukuran asli. Kalau lebih tinggi dari modal,
+  // bagian body scrollable (overflow-y-auto) — tidak ada lagi auto-scale
+  // yang bikin teks terlihat kecil.
   const outerRef = useRef<HTMLDivElement | null>(null);
   const innerRef = useRef<HTMLDivElement | null>(null);
-
-  useLayoutEffect(() => {
-    const outer = outerRef.current;
-    const inner = innerRef.current;
-    if (!outer || !inner) return;
-
-    let raf = 0;
-
-    const fit = () => {
-      // Reset dulu ke lebar natural penuh tanpa transform supaya
-      // pengukuran tinggi konten akurat.
-      inner.style.transform = "none";
-      inner.style.transformOrigin = "top left";
-      inner.style.width = "100%";
-      // Paksa reflow.
-      void inner.offsetHeight;
-
-      const cs = getComputedStyle(outer);
-      const padT = parseFloat(cs.paddingTop) || 0;
-      const padB = parseFloat(cs.paddingBottom) || 0;
-      const availH = outer.clientHeight - padT - padB;
-      const naturalH = inner.scrollHeight;
-
-      if (naturalH <= 0 || availH <= 0) return;
-
-      let next = 1;
-      if (naturalH > availH) {
-        // Margin 6% supaya aman dari pembulatan piksel & late render.
-        next = Math.max(0.3, (availH / naturalH) * 0.94);
-      }
-
-      // Terapkan langsung ke DOM. Lebar dilebarin 1/scale supaya
-      // setelah dikecilkan, lebar visualnya tetap = lebar outer (penuh).
-      inner.style.transform = `scale(${next})`;
-      inner.style.transformOrigin = "top left";
-      inner.style.width = next < 1 ? `${100 / next}%` : "100%";
-      inner.style.willChange = "transform";
-
-      // Verifikasi pasca-apply: kalau setelah scaling tinggi visual
-      // ternyata masih lewat (mis. konten reflow jadi lebih tinggi
-      // di lebar baru), kecilkan lagi.
-      void inner.offsetHeight;
-      const visualH = inner.scrollHeight * next;
-      if (visualH > availH) {
-        const adjust = Math.max(0.3, (availH / inner.scrollHeight) * 0.94);
-        inner.style.transform = `scale(${adjust})`;
-        inner.style.width = adjust < 1 ? `${100 / adjust}%` : "100%";
-      }
-    };
-
-    const schedule = () => {
-      cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => {
-        raf = requestAnimationFrame(fit);
-      });
-    };
-
-    schedule();
-    const t1 = window.setTimeout(schedule, 150);
-    const t2 = window.setTimeout(schedule, 500);
-    const t3 = window.setTimeout(schedule, 1500);
-
-    const ro = new ResizeObserver(schedule);
-    ro.observe(outer);
-    ro.observe(inner);
-
-    const mo = new MutationObserver(schedule);
-    mo.observe(inner, {
-      childList: true,
-      subtree: true,
-      characterData: true,
-    });
-
-    window.addEventListener("resize", schedule);
-    if (typeof document !== "undefined" && (document as any).fonts?.ready) {
-      (document as any).fonts.ready.then(schedule).catch(() => {});
-    }
-
-    return () => {
-      cancelAnimationFrame(raf);
-      window.clearTimeout(t1);
-      window.clearTimeout(t2);
-      window.clearTimeout(t3);
-      ro.disconnect();
-      mo.disconnect();
-      window.removeEventListener("resize", schedule);
-    };
-  }, [merged, symbol, brokerAnalysis, brokerComparison, tab]);
 
   return (
     <div
@@ -605,14 +517,10 @@ function ResultModal({
 
         <div
           ref={outerRef}
-          className="flex-1 min-h-0 min-w-0 overflow-hidden px-4 md:px-5 py-3"
+          className="flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden px-4 md:px-5 py-3"
         >
           <div
             ref={innerRef}
-            style={{
-              transformOrigin: "top left",
-              willChange: "transform",
-            }}
             className="space-y-3"
           >
             {(merged || brokerAnalysis || brokerComparison) && (
