@@ -215,6 +215,31 @@ export function HomePage() {
     setShowResult(true);
   };
 
+  // Auto-deteksi kode saham dari teks yang di-paste.
+  // Format yang dikenali (case-insensitive):
+  //   "Berikut adalah Data saham ELSA (...)"
+  //   "Rekap ... Saham ELSA (...)"
+  //   "Saham ELSA"
+  function extractSymbolFromText(text: string): string | null {
+    if (!text) return null;
+    const patterns = [
+      /Data\s+saham\s+([A-Z]{2,6})\b/i,
+      /Saham\s+([A-Z]{2,6})\s*\(/i,
+      /\bSaham\s+([A-Z]{2,6})\b/i,
+    ];
+    for (const re of patterns) {
+      const m = text.match(re);
+      if (m) return m[1].toUpperCase();
+    }
+    return null;
+  }
+
+  const handlePasteData = (key: SourceKey, value: string) => {
+    setData((prev) => ({ ...prev, [key]: value }));
+    const found = extractSymbolFromText(value);
+    if (found) setSymbol(found);
+  };
+
   const handleCloseResult = () => {
     setShowResult(false);
   };
@@ -401,7 +426,7 @@ export function HomePage() {
 
           <textarea
             value={safeData[active]}
-            onChange={(e) => setData((prev) => ({ ...prev, [active]: e.target.value }))}
+            onChange={(e) => handlePasteData(active, e.target.value)}
             spellCheck={false}
             placeholder="Paste data di sini..."
             className="w-full min-h-[260px] bg-transparent text-[13px] font-mono px-4 py-3 outline-none resize-y placeholder:text-muted-foreground/60 leading-relaxed"
@@ -563,7 +588,7 @@ function ResultModal({
                   <div className="space-y-3">
                     {brokerConsistency && (
                       <ErrorBoundary label="Konsistensi Broker">
-                        <BrokerConsistencyCard analysis={brokerConsistency} merged={merged} />
+                        <BrokerConsistencyCard analysis={brokerConsistency} merged={merged} symbol={symbol} />
                       </ErrorBoundary>
                     )}
                     <ErrorBoundary label="Semua Broker">

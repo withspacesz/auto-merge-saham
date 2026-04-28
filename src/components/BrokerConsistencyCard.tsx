@@ -337,13 +337,20 @@ function CandidateRow({ c }: { c: Candidate }) {
 export function BrokerConsistencyCard({
   analysis,
   merged,
+  symbol: symbolProp,
 }: {
   analysis: ConsistencyAnalysis;
   merged?: MergedTable | null;
+  symbol?: string;
 }) {
   const ctx = buildCandleCtx(merged);
   const candidates = buildAccumulationCandidates(analysis, ctx);
-  const symbol = analysis.weekly.symbol || analysis.daily.symbol || "saham ini";
+  // Prioritas: prop dari halaman (auto-detect dari /data) > simbol dari teks broker
+  const symbol =
+    (symbolProp && symbolProp.trim()) ||
+    analysis.weekly.symbol ||
+    analysis.daily.symbol ||
+    "saham ini";
 
   // Distribusi singkat
   const topDist = analysis.konsistenDist.slice(0, 5);
