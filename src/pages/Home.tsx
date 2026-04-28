@@ -463,20 +463,24 @@ function ResultModal({
     if (!brokerComparison && tab === "bandingkan") setTab("rekomendasi");
   }, [brokerAnalysis, brokerComparison, tab]);
 
-  // Auto-fit: kecilkan konten supaya muat tinggi modal tanpa scroll,
-  // tapi lebar visualnya tetap penuh sesuai header.
+  // Auto-fit imperatif: terus pantau ukuran konten dan skalakan supaya
+  // muat tinggi modal tanpa scroll, sambil mempertahankan lebar visual
+  // 100% (sama dengan header).
   const outerRef = useRef<HTMLDivElement | null>(null);
   const innerRef = useRef<HTMLDivElement | null>(null);
-  const [scale, setScale] = useState(1);
 
   useLayoutEffect(() => {
     const outer = outerRef.current;
     const inner = innerRef.current;
     if (!outer || !inner) return;
 
+    let raf = 0;
+
     const fit = () => {
-      // Reset ke ukuran natural untuk diukur ulang.
+      // Reset dulu ke lebar natural penuh tanpa transform supaya
+      // pengukuran tinggi konten akurat.
       inner.style.transform = "none";
+      inner.style.transformOrigin = "top left";
       inner.style.width = "100%";
       // Paksa reflow.
       void inner.offsetHeight;
@@ -489,26 +493,67 @@ function ResultModal({
 
       if (naturalH <= 0 || availH <= 0) return;
 
-      if (naturalH <= availH) {
-        setScale(1);
-        return;
+      let next = 1;
+      if (naturalH > availH) {
+        // Margin 6% supaya aman dari pembulatan piksel & late render.
+        next = Math.max(0.3, (availH / naturalH) * 0.94);
       }
 
-      // Pakai margin keamanan kecil supaya tidak kepotong.
-      const next = Math.max(0.4, Math.min(1, (availH / naturalH) * 0.98));
-      setScale(next);
+      // Terapkan langsung ke DOM. Lebar dilebarin 1/scale supaya
+      // setelah dikecilkan, lebar visualnya tetap = lebar outer (penuh).
+      inner.style.transform = `scale(${next})`;
+      inner.style.transformOrigin = "top left";
+      inner.style.width = next < 1 ? `${100 / next}%` : "100%";
+      inner.style.willChange = "transform";
+
+      // Verifikasi pasca-apply: kalau setelah scaling tinggi visual
+      // ternyata masih lewat (mis. konten reflow jadi lebih tinggi
+      // di lebar baru), kecilkan lagi.
+      void inner.offsetHeight;
+      const visualH = inner.scrollHeight * next;
+      if (visualH > availH) {
+        const adjust = Math.max(0.3, (availH / inner.scrollHeight) * 0.94);
+        inner.style.transform = `scale(${adjust})`;
+        inner.style.width = adjust < 1 ? `${100 / adjust}%` : "100%";
+      }
     };
 
-    const raf = requestAnimationFrame(() => requestAnimationFrame(fit));
-    const ro = new ResizeObserver(fit);
+    const schedule = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        raf = requestAnimationFrame(fit);
+      });
+    };
+
+    schedule();
+    const t1 = window.setTimeout(schedule, 150);
+    const t2 = window.setTimeout(schedule, 500);
+    const t3 = window.setTimeout(schedule, 1500);
+
+    const ro = new ResizeObserver(schedule);
     ro.observe(outer);
     ro.observe(inner);
-    window.addEventListener("resize", fit);
+
+    const mo = new MutationObserver(schedule);
+    mo.observe(inner, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
+
+    window.addEventListener("resize", schedule);
+    if (typeof document !== "undefined" && (document as any).fonts?.ready) {
+      (document as any).fonts.ready.then(schedule).catch(() => {});
+    }
 
     return () => {
       cancelAnimationFrame(raf);
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
+      window.clearTimeout(t3);
       ro.disconnect();
-      window.removeEventListener("resize", fit);
+      mo.disconnect();
+      window.removeEventListener("resize", schedule);
     };
   }, [merged, symbol, brokerAnalysis, brokerComparison, tab]);
 
@@ -550,9 +595,7 @@ function ResultModal({
           <div
             ref={innerRef}
             style={{
-              transform: `scale(${scale})`,
               transformOrigin: "top left",
-              width: scale < 1 ? `${100 / scale}%` : "100%",
               willChange: "transform",
             }}
             className="space-y-3"
