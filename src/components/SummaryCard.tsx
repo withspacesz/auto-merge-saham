@@ -78,6 +78,14 @@ function ketTone(score: number): Tone {
   return "neutral";
 }
 
+// Tabel merged biasanya pakai format "DD-MM-YYYY", broker analysis pakai
+// "YYYY-MM-DD". Normalisasi ke YYYY-MM-DD untuk pencocokan.
+function normalizeMergedDate(s: string): string {
+  const m = s.match(/^(\d{2})-(\d{2})-(\d{4})$/);
+  if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+  return s;
+}
+
 type DayInfo = {
   date: string;
   price: number | null;
@@ -503,15 +511,59 @@ export function SummaryCard({ merged, brokerAnalysis }: Props) {
 
   // Driver chip — selalu di paling depan supaya user langsung lihat
   // siapa yg jadi driver hari terakhir + arahnya AKUM/DIST.
+  // Cari hari di tabel merged yang tanggalnya = tanggal broker analysis
+  // (broker hanya punya top-10, NBSA/MF di tabel adalah total pasar penuh
+  // → dipakai sebagai ground truth arah asing/lokal).
+  const brokerDayInfo: DayInfo | null = (() => {
+    if (!brokerAnalysis) return null;
+    const target = brokerAnalysis.date; // "YYYY-MM-DD"
+    const found = days.find(
+      (d) => normalizeMergedDate(d.date) === target,
+    );
+    return found ?? latest;
+  })();
+  const groundTruthAsingDir: 1 | 0 | -1 = brokerDayInfo?.nbsa != null
+    ? brokerDayInfo.nbsa > 0
+      ? 1
+      : brokerDayInfo.nbsa < 0
+        ? -1
+        : 0
+    : 0;
+  const groundTruthLokalDir: 1 | 0 | -1 = brokerDayInfo?.mf != null
+    ? brokerDayInfo.mf > 0
+      ? 1
+      : brokerDayInfo.mf < 0
+        ? -1
+        : 0
+    : 0;
+
   if (brokerAnalysis) {
     const { narrative, netAsing, netLokal } = brokerAnalysis;
     const dirAkum = (n: number): "AKUM" | "DIST" | null =>
       n > 0 ? "AKUM" : n < 0 ? "DIST" : null;
+    // Pakai NBSA/MF aktual dari tabel sebagai sumber kebenaran arah,
+    // baru fallback ke net broker top-10 kalau ground truth nol.
+    const asingDirSign = groundTruthAsingDir !== 0
+      ? groundTruthAsingDir
+      : netAsing > 0
+        ? 1
+        : netAsing < 0
+          ? -1
+          : 0;
+    const lokalDirSign = groundTruthLokalDir !== 0
+      ? groundTruthLokalDir
+      : netLokal > 0
+        ? 1
+        : netLokal < 0
+          ? -1
+          : 0;
+    const dirFromSign = (s: number): "AKUM" | "DIST" | null =>
+      s > 0 ? "AKUM" : s < 0 ? "DIST" : null;
     let driverText: string | null = null;
     let driverTone: Tone = "neutral";
     switch (narrative.label) {
       case "ASING DRIVER": {
-        const dir = dirAkum(netAsing);
+        const dir = dirFromSign(asingDirSign) ?? dirAkum(netAsing);
         if (dir) {
           driverText = `Asing Driver ${dir}`;
           driverTone = dir === "AKUM" ? "green" : "red";
@@ -519,7 +571,7 @@ export function SummaryCard({ merged, brokerAnalysis }: Props) {
         break;
       }
       case "LOKAL DRIVER": {
-        const dir = dirAkum(netLokal);
+        const dir = dirFromSign(lokalDirSign) ?? dirAkum(netLokal);
         if (dir) {
           driverText = `Lokal Driver ${dir}`;
           driverTone = dir === "AKUM" ? "green" : "red";
@@ -527,12 +579,30 @@ export function SummaryCard({ merged, brokerAnalysis }: Props) {
         break;
       }
       case "DUA-DUANYA AKUM":
-        driverText = "Asing+Lokal AKUM";
-        driverTone = "green";
+        // Hormati ground truth: kalau salah satunya sebenarnya distribusi,
+        // jangan klaim dua-duanya akumulasi.
+        if (asingDirSign < 0 && lokalDirSign < 0) {
+          driverText = "Asing+Lokal DIST";
+          driverTone = "red";
+        } else if (asingDirSign < 0 || lokalDirSign < 0) {
+          driverText = "Broker Campuran";
+          driverTone = "amber";
+        } else {
+          driverText = "Asing+Lokal AKUM";
+          driverTone = "green";
+        }
         break;
       case "DISTRIBUSI":
-        driverText = "Asing+Lokal DIST";
-        driverTone = "red";
+        if (asingDirSign > 0 && lokalDirSign > 0) {
+          driverText = "Asing+Lokal AKUM";
+          driverTone = "green";
+        } else if (asingDirSign > 0 || lokalDirSign > 0) {
+          driverText = "Broker Campuran";
+          driverTone = "amber";
+        } else {
+          driverText = "Asing+Lokal DIST";
+          driverTone = "red";
+        }
         break;
       case "CAMPURAN":
         driverText = "Broker Campuran";
@@ -930,6 +1000,14 @@ function RecommendationBanner({
           analysis={brokerAnalysis}
           recommendationTone={tone}
           recommendationLabel={label}
+          groundTruth={{
+            asingDir: groundTruthAsingDir,
+            lokalDir: groundTruthLokalDir,
+            nbsa: brokerDayInfo?.nbsa ?? null,
+            mf: brokerDayInfo?.mf ?? null,
+            ketNbsa: brokerDayInfo?.ketNbsa ?? "",
+            ketMf: brokerDayInfo?.ketMf ?? "",
+          }}
         />
       )}
     </div>
@@ -940,13 +1018,21 @@ function BandarConclusion({
   analysis,
   recommendationTone,
   recommendationLabel,
+  groundTruth,
 }: {
   analysis: BrokerAnalysis;
   recommendationTone: Tone;
   recommendationLabel: "AKUMULASI" | "TAHAN" | "KURANGI";
+  groundTruth?: {
+    asingDir: 1 | 0 | -1;
+    lokalDir: 1 | 0 | -1;
+    nbsa: number | null;
+    mf: number | null;
+    ketNbsa: string;
+    ketMf: string;
+  };
 }) {
   const {
-    narrative,
     netAsing,
     netLokal,
     date,
@@ -956,7 +1042,15 @@ function BandarConclusion({
     topLokalSeller,
     totalBuy,
   } = analysis;
-  const tone = (narrative.tone as Tone) ?? "neutral";
+
+  // Pakai NBSA/MF aktual dari tabel sebagai sumber kebenaran arah.
+  // Broker hanya punya top-10 jadi totalnya bisa menyesatkan.
+  const asingDir: number = groundTruth && groundTruth.asingDir !== 0
+    ? groundTruth.asingDir
+    : netAsing > 0 ? 1 : netAsing < 0 ? -1 : 0;
+  const lokalDir: number = groundTruth && groundTruth.lokalDir !== 0
+    ? groundTruth.lokalDir
+    : netLokal > 0 ? 1 : netLokal < 0 ? -1 : 0;
 
   // Insight ringkas (1 kalimat) yang nyebut nama broker dominan.
   const insight = buildBrokerInsight({
@@ -967,15 +1061,33 @@ function BandarConclusion({
     topLokalBuyer,
     topLokalSeller,
     totalBuy,
+    asingDirOverride: asingDir,
+    lokalDirOverride: lokalDir,
   });
+
+  // Tone efektif berdasarkan ground truth.
+  const effTone: Tone =
+    asingDir > 0 && lokalDir >= 0
+      ? "green"
+      : asingDir < 0 && lokalDir <= 0
+        ? "red"
+        : asingDir > 0 && lokalDir < 0
+          ? "green" // bandar asing serap
+          : asingDir < 0 && lokalDir > 0
+            ? "red" // bag holder warning
+            : asingDir > 0
+              ? "green"
+              : asingDir < 0
+                ? "red"
+                : "neutral";
 
   // Verdict prefix yg menyambung ke rekomendasi di atas — bukan kalimat berdiri sendiri.
   const sejalan =
-    (recommendationTone === "green" && tone === "green") ||
-    (recommendationTone === "red" && tone === "red");
+    (recommendationTone === "green" && effTone === "green") ||
+    (recommendationTone === "red" && effTone === "red");
   const bertentangan =
-    (recommendationTone === "green" && tone === "red") ||
-    (recommendationTone === "red" && tone === "green");
+    (recommendationTone === "green" && effTone === "red") ||
+    (recommendationTone === "red" && effTone === "green");
   const arah =
     recommendationLabel === "AKUMULASI"
       ? "sinyal beli"
@@ -987,7 +1099,7 @@ function BandarConclusion({
     : bertentangan
       ? `Berlawanan — perhatikan sebelum eksekusi:`
       : `Konteks broker hari terakhir:`;
-  const verdictTone: Tone = sejalan ? tone : bertentangan ? "amber" : "neutral";
+  const verdictTone: Tone = sejalan ? effTone : bertentangan ? "amber" : "neutral";
 
   return (
     <div className="mt-3 pt-3 border-t border-border/60 space-y-2">
@@ -1016,6 +1128,8 @@ function buildBrokerInsight({
   topLokalBuyer,
   topLokalSeller,
   totalBuy,
+  asingDirOverride,
+  lokalDirOverride,
 }: {
   netAsing: number;
   netLokal: number;
@@ -1024,13 +1138,24 @@ function buildBrokerInsight({
   topLokalBuyer?: { code: string; value: number; info: { name: string } };
   topLokalSeller?: { code: string; value: number; info: { name: string } };
   totalBuy: number;
+  asingDirOverride?: number;
+  lokalDirOverride?: number;
 }): string {
   const fmtAbs = (n: number) => fmtIDR(Math.abs(n)).replace(/^[+-]/, "");
   const pct = (n: number) =>
     totalBuy > 0 ? ` (~${((Math.abs(n) / totalBuy) * 100).toFixed(0)}% beli)` : "";
 
+  // Pakai arah dari ground truth (NBSA/MF aktual) kalau ada,
+  // jatuh ke net broker top-10 kalau tidak.
+  const aDir = asingDirOverride !== undefined && asingDirOverride !== 0
+    ? asingDirOverride
+    : netAsing > 0 ? 1 : netAsing < 0 ? -1 : 0;
+  const lDir = lokalDirOverride !== undefined && lokalDirOverride !== 0
+    ? lokalDirOverride
+    : netLokal > 0 ? 1 : netLokal < 0 ? -1 : 0;
+
   // Asing serap, lokal lepas — pola bandar asing
-  if (netAsing > 0 && netLokal < 0) {
+  if (aDir > 0 && lDir < 0) {
     const a = topAsingBuyer
       ? `${topAsingBuyer.code} (${topAsingBuyer.info.name}) +${fmtAbs(topAsingBuyer.value)}${pct(topAsingBuyer.value)}`
       : "asing";
@@ -1040,7 +1165,7 @@ function buildBrokerInsight({
     return `${a} serap di tengah distribusi lokal ${l} — pola klasik bandar asing yang ngangkat.`;
   }
   // Asing dist, lokal serap — bag holder warning
-  if (netAsing < 0 && netLokal > 0) {
+  if (aDir < 0 && lDir > 0) {
     const a = topAsingSeller
       ? `${topAsingSeller.code} (${topAsingSeller.info.name}) -${fmtAbs(topAsingSeller.value)}`
       : "asing";
@@ -1050,7 +1175,7 @@ function buildBrokerInsight({
     return `${a} buang ke ${l} — hati-hati lokal jadi bag holder.`;
   }
   // Sama-sama akum
-  if (netAsing > 0 && netLokal > 0) {
+  if (aDir > 0 && lDir > 0) {
     const a = topAsingBuyer
       ? `${topAsingBuyer.code} (${topAsingBuyer.info.name}) +${fmtAbs(topAsingBuyer.value)}${pct(topAsingBuyer.value)}`
       : null;
@@ -1066,7 +1191,7 @@ function buildBrokerInsight({
     return `Asing & lokal sama-sama akumulasi — tekanan beli kompak dari dua sisi.`;
   }
   // Sama-sama dist
-  if (netAsing < 0 && netLokal < 0) {
+  if (aDir < 0 && lDir < 0) {
     const a = topAsingSeller
       ? `${topAsingSeller.code} (${topAsingSeller.info.name}) -${fmtAbs(topAsingSeller.value)}`
       : null;
@@ -1081,7 +1206,33 @@ function buildBrokerInsight({
     }
     return `Asing & lokal sama-sama distribusi — tekanan jual kuat, risiko lanjut turun.`;
   }
-  // Mixed/neutral
+  // Hanya satu sisi yang punya arah jelas (yang lain netral).
+  if (aDir > 0 && lDir === 0) {
+    const a = topAsingBuyer
+      ? `${topAsingBuyer.code} (${topAsingBuyer.info.name}) +${fmtAbs(topAsingBuyer.value)}${pct(topAsingBuyer.value)}`
+      : "asing";
+    return `${a} memimpin akumulasi sementara lokal cenderung netral — driver utama dari sisi asing.`;
+  }
+  if (aDir < 0 && lDir === 0) {
+    const a = topAsingSeller
+      ? `${topAsingSeller.code} (${topAsingSeller.info.name}) -${fmtAbs(topAsingSeller.value)}`
+      : "asing";
+    return `${a} memimpin distribusi sementara lokal cenderung netral — tekanan jual datang dari sisi asing.`;
+  }
+  if (lDir > 0 && aDir === 0) {
+    const l = topLokalBuyer
+      ? `${topLokalBuyer.code} (${topLokalBuyer.info.name}) +${fmtAbs(topLokalBuyer.value)}${pct(topLokalBuyer.value)}`
+      : "lokal";
+    return `${l} memimpin akumulasi sementara asing cenderung netral — driver utama dari sisi lokal.`;
+  }
+  if (lDir < 0 && aDir === 0) {
+    const l = topLokalSeller
+      ? `${topLokalSeller.code} (${topLokalSeller.info.name}) -${fmtAbs(topLokalSeller.value)}`
+      : "lokal";
+    return `${l} memimpin distribusi sementara asing cenderung netral — tekanan jual datang dari sisi lokal.`;
+  }
+
+  // Mixed/neutral total
   const topBuy = topAsingBuyer ?? topLokalBuyer;
   const topSell = topAsingSeller ?? topLokalSeller;
   if (topBuy && topSell) {
