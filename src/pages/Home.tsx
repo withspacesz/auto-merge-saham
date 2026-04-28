@@ -476,19 +476,41 @@ function ResultModal({
       inner.style.transform = "none";
       // Force reflow agar measurement memperhitungkan reset transform.
       void inner.offsetHeight;
-      const naturalH = inner.scrollHeight;
-      const naturalW = inner.scrollWidth;
+      // Pakai bounding rect (sub-pixel akurat) + ceil agar tidak under-estimate.
+      const innerRect = inner.getBoundingClientRect();
+      const naturalH = Math.ceil(Math.max(inner.scrollHeight, innerRect.height));
+      const naturalW = Math.ceil(Math.max(inner.scrollWidth, innerRect.width));
       const cs = getComputedStyle(outer);
       const padT = parseFloat(cs.paddingTop) || 0;
       const padB = parseFloat(cs.paddingBottom) || 0;
       const padL = parseFloat(cs.paddingLeft) || 0;
       const padR = parseFloat(cs.paddingRight) || 0;
-      const availH = outer.clientHeight - padT - padB;
-      const availW = outer.clientWidth - padL - padR;
+      const availH = Math.floor(outer.clientHeight - padT - padB);
+      const availW = Math.floor(outer.clientWidth - padL - padR);
       if (naturalH <= 0 || naturalW <= 0 || availH <= 0 || availW <= 0) return;
-      // Margin keamanan 3% supaya pasti fit (browser rounding, scrollbar, dll).
-      const s = Math.min(1, (availW / naturalW) * 0.97, (availH / naturalH) * 0.97);
-      setScale(s);
+      // Margin keamanan 8% (lebih agresif) supaya pasti fit di semua zoom level.
+      const baseScale = Math.min(1, (availW / naturalW) * 0.92, (availH / naturalH) * 0.92);
+      // Pasang scale dulu, lalu verifikasi anak terakhir benar-benar fit.
+      inner.style.transform = `scale(${baseScale})`;
+      void inner.offsetHeight;
+      let finalScale = baseScale;
+      // Verifikasi visual: cek apakah last child masih lewat batas outer.
+      const lastChild = inner.lastElementChild as HTMLElement | null;
+      if (lastChild) {
+        const outerRect = outer.getBoundingClientRect();
+        const lastRect = lastChild.getBoundingClientRect();
+        const outerBottom = outerRect.bottom - padB;
+        if (lastRect.bottom > outerBottom) {
+          // Konten masih overflow visual — kecilkan lagi proporsional.
+          const visibleH = outerBottom - outerRect.top - padT;
+          const consumedH = lastRect.bottom - outerRect.top - padT;
+          if (consumedH > 0 && visibleH > 0) {
+            const correction = (visibleH / consumedH) * 0.97;
+            finalScale = Math.max(0.15, baseScale * correction);
+          }
+        }
+      }
+      setScale(finalScale);
     };
 
     let rafIds: number[] = [];
