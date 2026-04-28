@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Calendar, Check, Copy, Hash, X } from "lucide-react";
 import { ResultTable } from "@/components/ResultTable";
 import { SummaryCard } from "@/components/SummaryCard";
@@ -453,9 +453,6 @@ function ResultModal({
   brokerComparison: BrokerComparison | null;
   onClose: () => void;
 }) {
-  const outerRef = useRef<HTMLDivElement>(null);
-  const innerRef = useRef<HTMLDivElement>(null);
-  const [fit, setFit] = useState({ scale: 1 });
   const [tab, setTab] = useState<"rekomendasi" | "top-broker" | "bandingkan">(
     brokerComparison ? "bandingkan" : "rekomendasi",
   );
@@ -465,96 +462,6 @@ function ResultModal({
     if (!brokerAnalysis && tab === "top-broker") setTab("rekomendasi");
     if (!brokerComparison && tab === "bandingkan") setTab("rekomendasi");
   }, [brokerAnalysis, brokerComparison, tab]);
-
-  useLayoutEffect(() => {
-    const inner = innerRef.current;
-    const outer = outerRef.current;
-    if (!inner || !outer) return;
-
-    const measureAndScale = () => {
-      // Reset transform supaya pengukuran benar di ukuran alami.
-      inner.style.transform = "none";
-      // Force reflow agar measurement memperhitungkan reset transform.
-      void inner.offsetHeight;
-      // Pakai bounding rect (sub-pixel akurat) + ceil agar tidak under-estimate.
-      const innerRect = inner.getBoundingClientRect();
-      const naturalH = Math.ceil(Math.max(inner.scrollHeight, innerRect.height));
-      const naturalW = Math.ceil(Math.max(inner.scrollWidth, innerRect.width));
-      const cs = getComputedStyle(outer);
-      const padT = parseFloat(cs.paddingTop) || 0;
-      const padB = parseFloat(cs.paddingBottom) || 0;
-      const padL = parseFloat(cs.paddingLeft) || 0;
-      const padR = parseFloat(cs.paddingRight) || 0;
-      const availH = Math.floor(outer.clientHeight - padT - padB);
-      const availW = Math.floor(outer.clientWidth - padL - padR);
-      if (naturalH <= 0 || naturalW <= 0 || availH <= 0 || availW <= 0) return;
-      // Margin keamanan 8% (lebih agresif) supaya pasti fit di semua zoom level.
-      const baseScale = Math.min(1, (availW / naturalW) * 0.92, (availH / naturalH) * 0.92);
-      // Pasang scale (origin center) supaya pengukuran verifikasi konsisten
-      // dengan render akhir.
-      inner.style.transformOrigin = "center center";
-      inner.style.transform = `scale(${baseScale})`;
-      void inner.offsetHeight;
-      let finalScale = baseScale;
-      // Verifikasi visual: cek apakah last child masih lewat batas outer.
-      const lastChild = inner.lastElementChild as HTMLElement | null;
-      if (lastChild) {
-        const outerRect = outer.getBoundingClientRect();
-        const lastRect = lastChild.getBoundingClientRect();
-        const outerBottom = outerRect.bottom - padB;
-        if (lastRect.bottom > outerBottom) {
-          // Konten masih overflow visual — kecilkan lagi proporsional.
-          const visibleH = outerBottom - outerRect.top - padT;
-          const consumedH = lastRect.bottom - outerRect.top - padT;
-          if (consumedH > 0 && visibleH > 0) {
-            const correction = (visibleH / consumedH) * 0.97;
-            finalScale = Math.max(0.15, baseScale * correction);
-          }
-        }
-      }
-      setFit({ scale: finalScale });
-    };
-
-    let rafIds: number[] = [];
-    const scheduleRecalc = () => {
-      // Batalkan jadwal sebelumnya.
-      rafIds.forEach((id) => cancelAnimationFrame(id));
-      rafIds = [];
-      // Pengukuran berlapis: setelah layout settle, font load, dll.
-      const r1 = requestAnimationFrame(() => {
-        const r2 = requestAnimationFrame(() => {
-          measureAndScale();
-          // Pengukuran ulang setelah React menerapkan transform baru,
-          // memastikan tidak ada konten yang masih overflow.
-          const r3 = requestAnimationFrame(() => {
-            const r4 = requestAnimationFrame(measureAndScale);
-            rafIds.push(r4);
-          });
-          rafIds.push(r3);
-        });
-        rafIds.push(r2);
-      });
-      rafIds.push(r1);
-    };
-
-    scheduleRecalc();
-
-    const ro = new ResizeObserver(() => scheduleRecalc());
-    ro.observe(outer);
-    ro.observe(inner);
-    window.addEventListener("resize", scheduleRecalc);
-
-    // Re-measure setelah font selesai load — sering bikin konten berubah tinggi.
-    if (document.fonts && document.fonts.ready) {
-      document.fonts.ready.then(scheduleRecalc).catch(() => {});
-    }
-
-    return () => {
-      rafIds.forEach((id) => cancelAnimationFrame(id));
-      ro.disconnect();
-      window.removeEventListener("resize", scheduleRecalc);
-    };
-  }, [merged, symbol, brokerAnalysis, brokerComparison, tab]);
 
   return (
     <div
@@ -588,20 +495,9 @@ function ResultModal({
         </div>
 
         <div
-          ref={outerRef}
-          className="flex-1 min-h-0 min-w-0 overflow-hidden px-4 md:px-5 py-3 flex items-center justify-center"
+          className="flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden px-4 md:px-5 py-3"
         >
-          <div
-            ref={innerRef}
-            style={{
-              transform: `scale(${fit.scale})`,
-              transformOrigin: "center center",
-              width: "max-content",
-              maxWidth: "none",
-              willChange: "transform",
-            }}
-            className="space-y-3"
-          >
+          <div className="space-y-3 w-full">
             {(merged || brokerAnalysis || brokerComparison) && (
               <div>
                 <div className="flex items-center gap-1 mb-2">
