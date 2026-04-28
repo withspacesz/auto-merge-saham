@@ -68,11 +68,28 @@ export function BrokerCompareCard({ comparison }: Props) {
     flippedToSell.length +
     increasedSell.length;
 
-  const hasSecondary =
-    decreasedBuy.length > 0 ||
-    decreasedSell.length > 0 ||
-    exitedBuy.length > 0 ||
-    exitedSell.length > 0;
+  const leftPrimary = [
+    { entries: newAccumulators, key: "newBuy" },
+    { entries: flippedToBuy, key: "flipBuy" },
+    { entries: increasedBuy, key: "incBuy" },
+  ].filter((b) => b.entries.length > 0);
+  const rightPrimary = [
+    { entries: newDistributors, key: "newSell" },
+    { entries: flippedToSell, key: "flipSell" },
+    { entries: increasedSell, key: "incSell" },
+  ].filter((b) => b.entries.length > 0);
+
+  const leftSecondary = [
+    { entries: decreasedBuy, key: "decBuy" },
+    { entries: exitedBuy, key: "exitBuy" },
+  ].filter((b) => b.entries.length > 0);
+  const rightSecondary = [
+    { entries: decreasedSell, key: "decSell" },
+    { entries: exitedSell, key: "exitSell" },
+  ].filter((b) => b.entries.length > 0);
+
+  const hasPrimary = leftPrimary.length > 0 || rightPrimary.length > 0;
+  const hasSecondary = leftSecondary.length > 0 || rightSecondary.length > 0;
 
   return (
     <div className="rounded-xl border border-border bg-card overflow-hidden">
@@ -90,104 +107,126 @@ export function BrokerCompareCard({ comparison }: Props) {
 
       <NarrativeBanner comparison={comparison} totalSignals={totalSignals} />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-border">
-        {/* KOLOM KIRI — semua AKUMULASI */}
-        <div className="flex flex-col divide-y divide-border bg-card">
-          <BucketSection
-            title="Mulai Akumulasi"
-            subtitle="Broker baru muncul di NET BUY (sebelumnya tidak ada)"
-            tone="emerald"
-            icon={<Sparkles className="h-4 w-4" />}
-            entries={newAccumulators}
-            variant="newBuy"
-          />
-          <BucketSection
-            title="Berbalik Akum (SELL → BUY)"
-            subtitle="Sebelumnya jualan, sekarang malah memborong"
-            tone="emerald"
-            icon={<TrendingUp className="h-4 w-4" />}
-            entries={flippedToBuy}
-            variant="flipBuy"
-          />
-          <BucketSection
-            title="Tambah Akumulasi"
-            subtitle="Broker buy → buy dengan posisi membesar"
-            tone="emerald-soft"
-            icon={<TrendingUp className="h-4 w-4" />}
-            entries={increasedBuy}
-            variant="increasedBuy"
-          />
-        </div>
+      {hasPrimary && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-border">
+          {/* KOLOM KIRI — semua AKUMULASI */}
+          <div className="flex flex-col divide-y divide-border bg-card">
+            {newAccumulators.length > 0 && (
+              <BucketSection
+                title="Mulai Akumulasi"
+                subtitle="Broker baru muncul di NET BUY (sebelumnya tidak ada)"
+                tone="emerald"
+                icon={<Sparkles className="h-4 w-4" />}
+                entries={newAccumulators}
+                variant="newBuy"
+              />
+            )}
+            {flippedToBuy.length > 0 && (
+              <BucketSection
+                title="Berbalik Akum (SELL → BUY)"
+                subtitle="Sebelumnya jualan, sekarang malah memborong"
+                tone="emerald"
+                icon={<TrendingUp className="h-4 w-4" />}
+                entries={flippedToBuy}
+                variant="flipBuy"
+              />
+            )}
+            {increasedBuy.length > 0 && (
+              <BucketSection
+                title="Tambah Akumulasi"
+                subtitle="Broker buy → buy dengan posisi membesar"
+                tone="emerald-soft"
+                icon={<TrendingUp className="h-4 w-4" />}
+                entries={increasedBuy}
+                variant="increasedBuy"
+              />
+            )}
+          </div>
 
-        {/* KOLOM KANAN — semua DISTRIBUSI */}
-        <div className="flex flex-col divide-y divide-border bg-card">
-          <BucketSection
-            title="Mulai Distribusi"
-            subtitle="Broker baru muncul di NET SELL (sebelumnya tidak ada)"
-            tone="rose"
-            icon={<UserPlus className="h-4 w-4" />}
-            entries={newDistributors}
-            variant="newSell"
-          />
-          <BucketSection
-            title="Berbalik Dist (BUY → SELL)"
-            subtitle="Sebelumnya borong, sekarang malah jualan"
-            tone="rose"
-            icon={<TrendingDown className="h-4 w-4" />}
-            entries={flippedToSell}
-            variant="flipSell"
-          />
-          <BucketSection
-            title="Tambah Distribusi"
-            subtitle="Broker sell → sell dengan posisi jual membesar"
-            tone="rose-soft"
-            icon={<TrendingDown className="h-4 w-4" />}
-            entries={increasedSell}
-            variant="increasedSell"
-          />
+          {/* KOLOM KANAN — semua DISTRIBUSI */}
+          <div className="flex flex-col divide-y divide-border bg-card">
+            {newDistributors.length > 0 && (
+              <BucketSection
+                title="Mulai Distribusi"
+                subtitle="Broker baru muncul di NET SELL (sebelumnya tidak ada)"
+                tone="rose"
+                icon={<UserPlus className="h-4 w-4" />}
+                entries={newDistributors}
+                variant="newSell"
+              />
+            )}
+            {flippedToSell.length > 0 && (
+              <BucketSection
+                title="Berbalik Dist (BUY → SELL)"
+                subtitle="Sebelumnya borong, sekarang malah jualan"
+                tone="rose"
+                icon={<TrendingDown className="h-4 w-4" />}
+                entries={flippedToSell}
+                variant="flipSell"
+              />
+            )}
+            {increasedSell.length > 0 && (
+              <BucketSection
+                title="Tambah Distribusi"
+                subtitle="Broker sell → sell dengan posisi jual membesar"
+                tone="rose-soft"
+                icon={<TrendingDown className="h-4 w-4" />}
+                entries={increasedSell}
+                variant="increasedSell"
+              />
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {hasSecondary && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-border border-t border-border">
           {/* KIRI — penurunan / selesai dari sisi AKUM */}
           <div className="flex flex-col divide-y divide-border bg-card">
-            <BucketSection
-              title="Akum Berkurang"
-              subtitle="Masih buy tapi lot/value-nya menyusut"
-              tone="muted"
-              icon={<TrendingDown className="h-4 w-4" />}
-              entries={decreasedBuy}
-              variant="decreasedBuy"
-            />
-            <BucketSection
-              title="Selesai Akumulasi"
-              subtitle="Sebelumnya buy, sekarang hilang dari Top 10"
-              tone="muted"
-              icon={<UserMinus className="h-4 w-4" />}
-              entries={exitedBuy}
-              variant="exitedBuy"
-            />
+            {decreasedBuy.length > 0 && (
+              <BucketSection
+                title="Akum Berkurang"
+                subtitle="Masih buy tapi lot/value-nya menyusut"
+                tone="muted"
+                icon={<TrendingDown className="h-4 w-4" />}
+                entries={decreasedBuy}
+                variant="decreasedBuy"
+              />
+            )}
+            {exitedBuy.length > 0 && (
+              <BucketSection
+                title="Selesai Akumulasi"
+                subtitle="Sebelumnya buy, sekarang hilang dari Top 10"
+                tone="muted"
+                icon={<UserMinus className="h-4 w-4" />}
+                entries={exitedBuy}
+                variant="exitedBuy"
+              />
+            )}
           </div>
 
           {/* KANAN — penurunan / selesai dari sisi DIST */}
           <div className="flex flex-col divide-y divide-border bg-card">
-            <BucketSection
-              title="Dist Berkurang"
-              subtitle="Masih sell tapi lot/value-nya menyusut"
-              tone="muted"
-              icon={<TrendingUp className="h-4 w-4" />}
-              entries={decreasedSell}
-              variant="decreasedSell"
-            />
-            <BucketSection
-              title="Selesai Distribusi"
-              subtitle="Sebelumnya sell, sekarang hilang dari Top 10"
-              tone="muted"
-              icon={<UserMinus className="h-4 w-4" />}
-              entries={exitedSell}
-              variant="exitedSell"
-            />
+            {decreasedSell.length > 0 && (
+              <BucketSection
+                title="Dist Berkurang"
+                subtitle="Masih sell tapi lot/value-nya menyusut"
+                tone="muted"
+                icon={<TrendingUp className="h-4 w-4" />}
+                entries={decreasedSell}
+                variant="decreasedSell"
+              />
+            )}
+            {exitedSell.length > 0 && (
+              <BucketSection
+                title="Selesai Distribusi"
+                subtitle="Sebelumnya sell, sekarang hilang dari Top 10"
+                tone="muted"
+                icon={<UserMinus className="h-4 w-4" />}
+                entries={exitedSell}
+                variant="exitedSell"
+              />
+            )}
           </div>
         </div>
       )}
@@ -297,6 +336,32 @@ type Variant =
   | "decreasedSell"
   | "exitedSell";
 
+function getColumnLabel(variant: Variant): React.ReactNode {
+  if (variant === "newBuy" || variant === "newSell") {
+    return (
+      <>
+        <span className="text-foreground/70">Posisi Sekarang</span>
+      </>
+    );
+  }
+  if (variant === "exitedBuy" || variant === "exitedSell") {
+    return (
+      <>
+        <span className="text-foreground/70">Posisi Sebelumnya</span>
+      </>
+    );
+  }
+  // flip & increased/decreased: prev → curr (Δ delta)
+  return (
+    <>
+      <span className="text-foreground/70">Sebelumnya</span>
+      <span className="mx-1 text-amber-300/80">→</span>
+      <span className="text-foreground/70">Sekarang</span>
+      <span className="ml-1 text-amber-300/80">(Δ Perubahan)</span>
+    </>
+  );
+}
+
 function BucketSection({
   title,
   subtitle,
@@ -349,17 +414,27 @@ function BucketSection({
         </div>
       </div>
 
-      {entries.length === 0 ? (
-        <div className="px-3 py-3 text-[11px] text-muted-foreground/60 italic">
-          — tidak ada —
-        </div>
-      ) : (
-        <ul className="divide-y divide-border/60">
-          {entries.map((e) => (
-            <CompareRow key={e.code} entry={e} variant={variant} />
-          ))}
-        </ul>
-      )}
+      {/* Sub-judul kolom: jelaskan arti angka di kolom kanan */}
+      <div className="flex items-center gap-2 px-3 py-1.5 border-b border-border/60 bg-muted/10">
+        <span className="shrink-0 inline-block min-w-[2.5rem] text-[9px] font-mono uppercase tracking-wider text-muted-foreground/60">
+          Kode
+        </span>
+        <span className="shrink-0 text-[9px] font-mono uppercase tracking-wider text-muted-foreground/60">
+          Tipe
+        </span>
+        <span className="min-w-0 flex-1 text-[9px] font-mono uppercase tracking-wider text-muted-foreground/60">
+          Nama Broker
+        </span>
+        <span className="shrink-0 text-[9px] font-mono uppercase tracking-wider">
+          {getColumnLabel(variant)}
+        </span>
+      </div>
+
+      <ul className="divide-y divide-border/60">
+        {entries.map((e) => (
+          <CompareRow key={e.code} entry={e} variant={variant} />
+        ))}
+      </ul>
     </div>
   );
 }
