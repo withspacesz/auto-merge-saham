@@ -978,31 +978,31 @@ function RecommendationBanner({
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+            <span className="text-[11px] md:text-xs uppercase tracking-wider text-muted-foreground">
               Rekomendasi
             </span>
             <span
-              className={`text-sm font-extrabold tracking-wider px-2 py-0.5 rounded uppercase ${TONE_BADGE[tone]}`}
+              className={`text-sm md:text-base font-extrabold tracking-wider px-2 py-0.5 rounded uppercase ${TONE_BADGE[tone]}`}
             >
               {label}
             </span>
-            <span className="text-[10px] text-muted-foreground">
+            <span className="text-[11px] md:text-xs text-muted-foreground">
               skor {scoreSign}
               {score.toFixed(1)}
             </span>
           </div>
-          <div className={`text-sm md:text-base font-bold mt-1 ${TONE_TEXT[tone]}`}>
+          <div className={`text-base md:text-lg font-bold mt-1.5 ${TONE_TEXT[tone]}`}>
             {headline}
           </div>
-          <p className="text-[11px] md:text-xs text-muted-foreground mt-1 leading-relaxed max-w-[680px]">
+          <p className="text-[13px] md:text-sm text-muted-foreground mt-1.5 leading-relaxed">
             {detail}
           </p>
           {reasons.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 mt-2">
+            <div className="flex flex-wrap gap-1.5 mt-2.5">
               {reasons.map((r, i) => (
                 <span
                   key={i}
-                  className={`text-[10px] px-2 py-0.5 rounded ${TONE_BADGE[r.tone]}`}
+                  className={`text-[11px] md:text-xs px-2 py-0.5 rounded ${TONE_BADGE[r.tone]}`}
                 >
                   {r.text}
                 </span>
@@ -1123,13 +1123,13 @@ function BandarConclusion({
   return (
     <div className="mt-3 pt-3 border-t border-border/60 space-y-2">
       <div className="flex items-center gap-2 flex-wrap">
-        <Building2 className="h-3.5 w-3.5 text-cyan-400 shrink-0" />
-        <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+        <Building2 className="h-4 w-4 text-cyan-400 shrink-0" />
+        <span className="text-[11px] md:text-xs uppercase tracking-wider text-muted-foreground">
           Konfirmasi Broker · {date}
         </span>
       </div>
 
-      <p className="text-[11px] md:text-xs text-foreground/90 leading-relaxed max-w-[680px]">
+      <p className="text-[13px] md:text-sm text-foreground/90 leading-relaxed">
         <span className={`font-semibold ${TONE_TEXT[verdictTone]}`}>
           {verdictPrefix}
         </span>{" "}
