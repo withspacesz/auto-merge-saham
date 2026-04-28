@@ -178,7 +178,19 @@ export function HomePage() {
   const [submitted, setSubmitted] = useState<Record<SourceKey, string> | null>(null);
   const [showResult, setShowResult] = useState(false);
 
-  const filledCount = (Object.values(data) as string[]).filter((v) => v.trim().length > 0).length;
+  // Defensif: kalau state lama (sebelum brokerPrev ditambahkan) di-rehydrate
+  // oleh HMR, beberapa key bisa undefined. Pastikan selalu string.
+  const safeData: Record<SourceKey, string> = {
+    data: data.data ?? "",
+    nbsa: data.nbsa ?? "",
+    mf: data.mf ?? "",
+    rcm: data.rcm ?? "",
+    broker: data.broker ?? "",
+    brokerPrev: data.brokerPrev ?? "",
+  };
+  const filledCount = (Object.values(safeData) as string[]).filter(
+    (v) => v.trim().length > 0,
+  ).length;
 
   const handleMerge = () => {
     setSubmitted({ ...data });
@@ -334,7 +346,7 @@ export function HomePage() {
                 key={s.key}
                 tag={s.tag}
                 command={formatCommand(s.cmdBase, symbol, mode, candleCount, from, to)}
-                filled={data[s.key].trim().length > 0}
+                filled={safeData[s.key].trim().length > 0}
                 active={active === s.key}
                 onClick={() => setActive(s.key)}
               />
@@ -346,7 +358,7 @@ export function HomePage() {
           <nav className="flex items-center gap-1 px-2 pt-2 border-b border-border overflow-x-auto">
             {SOURCES.map((s) => {
               const isActive = active === s.key;
-              const filled = data[s.key].trim().length > 0;
+              const filled = safeData[s.key].trim().length > 0;
               return (
                 <button
                   key={s.key}
@@ -376,7 +388,7 @@ export function HomePage() {
           </div>
 
           <textarea
-            value={data[active]}
+            value={safeData[active]}
             onChange={(e) => setData((prev) => ({ ...prev, [active]: e.target.value }))}
             spellCheck={false}
             placeholder="Paste data di sini..."
