@@ -698,6 +698,14 @@ export function SummaryCard({ merged, brokerAnalysis }: Props) {
           score={score}
           reasons={reasonsTopFour}
           brokerAnalysis={brokerAnalysis}
+          groundTruth={{
+            asingDir: groundTruthAsingDir,
+            lokalDir: groundTruthLokalDir,
+            nbsa: brokerDayInfo?.nbsa ?? null,
+            mf: brokerDayInfo?.mf ?? null,
+            ketNbsa: brokerDayInfo?.ketNbsa ?? "",
+            ketMf: brokerDayInfo?.ketMf ?? "",
+          }}
         />
       </div>
 
@@ -930,6 +938,7 @@ function RecommendationBanner({
   score,
   reasons,
   brokerAnalysis,
+  groundTruth,
 }: {
   recommendation: {
     label: "AKUMULASI" | "TAHAN" | "KURANGI";
@@ -940,6 +949,14 @@ function RecommendationBanner({
   score: number;
   reasons: Array<{ text: string; tone: Tone }>;
   brokerAnalysis?: BrokerAnalysis | null;
+  groundTruth?: {
+    asingDir: 1 | 0 | -1;
+    lokalDir: 1 | 0 | -1;
+    nbsa: number | null;
+    mf: number | null;
+    ketNbsa: string;
+    ketMf: string;
+  };
 }) {
   const { label, tone, headline, detail } = recommendation;
   const scoreSign = score > 0 ? "+" : "";
@@ -1000,14 +1017,16 @@ function RecommendationBanner({
           analysis={brokerAnalysis}
           recommendationTone={tone}
           recommendationLabel={label}
-          groundTruth={{
-            asingDir: groundTruthAsingDir,
-            lokalDir: groundTruthLokalDir,
-            nbsa: brokerDayInfo?.nbsa ?? null,
-            mf: brokerDayInfo?.mf ?? null,
-            ketNbsa: brokerDayInfo?.ketNbsa ?? "",
-            ketMf: brokerDayInfo?.ketMf ?? "",
-          }}
+          groundTruth={
+            groundTruth ?? {
+              asingDir: 0,
+              lokalDir: 0,
+              nbsa: null,
+              mf: null,
+              ketNbsa: "",
+              ketMf: "",
+            }
+          }
         />
       )}
     </div>
