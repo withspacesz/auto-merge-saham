@@ -1051,12 +1051,41 @@ function buildBrokerInsight({
   }
   // Sama-sama akum
   if (netAsing > 0 && netLokal > 0) {
+    const a = topAsingBuyer
+      ? `${topAsingBuyer.code} (${topAsingBuyer.info.name}) +${fmtAbs(topAsingBuyer.value)}${pct(topAsingBuyer.value)}`
+      : null;
+    const l = topLokalBuyer
+      ? `${topLokalBuyer.code} (${topLokalBuyer.info.name}) +${fmtAbs(topLokalBuyer.value)}${pct(topLokalBuyer.value)}`
+      : null;
+    if (a && l) {
+      return `${a} dari sisi asing & ${l} dari sisi lokal — dua-duanya akumulasi, tekanan beli kompak dari dua sisi.`;
+    }
+    if (a || l) {
+      return `${a ?? l} memimpin akumulasi — asing & lokal searah, tekanan beli kompak dari dua sisi.`;
+    }
     return `Asing & lokal sama-sama akumulasi — tekanan beli kompak dari dua sisi.`;
   }
   // Sama-sama dist
   if (netAsing < 0 && netLokal < 0) {
+    const a = topAsingSeller
+      ? `${topAsingSeller.code} (${topAsingSeller.info.name}) -${fmtAbs(topAsingSeller.value)}`
+      : null;
+    const l = topLokalSeller
+      ? `${topLokalSeller.code} (${topLokalSeller.info.name}) -${fmtAbs(topLokalSeller.value)}`
+      : null;
+    if (a && l) {
+      return `${a} dari sisi asing & ${l} dari sisi lokal — dua-duanya distribusi, tekanan jual kuat dari dua sisi, risiko lanjut turun.`;
+    }
+    if (a || l) {
+      return `${a ?? l} memimpin distribusi — asing & lokal searah jual, risiko lanjut turun.`;
+    }
     return `Asing & lokal sama-sama distribusi — tekanan jual kuat, risiko lanjut turun.`;
   }
   // Mixed/neutral
+  const topBuy = topAsingBuyer ?? topLokalBuyer;
+  const topSell = topAsingSeller ?? topLokalSeller;
+  if (topBuy && topSell) {
+    return `${topBuy.code} (${topBuy.info.name}) +${fmtAbs(topBuy.value)} ditutup ${topSell.code} (${topSell.info.name}) -${fmtAbs(topSell.value)} — beli & jual saling tutup, belum ada driver dominan.`;
+  }
   return `Beli & jual saling tutup — belum ada driver dominan dari sisi broker.`;
 }

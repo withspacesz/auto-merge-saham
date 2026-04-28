@@ -399,3 +399,167 @@ function buildNarrative(args: {
 
   return { label, tone, headline, detail: parts.join(". ") + "." };
 }
+
+// =====================================================================
+// Bandingkan dua snapshot Broker Activity
+//   - prev = snapshot lama (mis. 24-04-2026 single day)
+//   - curr = snapshot baru (mis. 24-04-2026 s.d 27-04-2026 cumulative)
+// Mendeteksi: broker baru muncul akumulasi, broker berbalik
+// (seller→buyer / buyer→seller), dan broker yang menambah/mengurangi posisi.
+// =====================================================================
+
+export type CompareSide = "buy" | "sell" | "absent";
+
+export type BrokerCompareEntry = {
+  code: string;
+  info: BrokerInfo;
+  prevSide: CompareSide;
+  currSide: CompareSide;
+  prevValue: number; // 0 jika absent; selalu signed (buy positif, sell negatif)
+  currValue: number;
+  delta: number; // currValue - prevValue (positif = lebih akum, negatif = lebih dist)
+  absDelta: number; // |delta|, untuk sorting urut dampak terbesar
+  prevRank?: number; // ranking di snapshot lama (1 = top)
+  currRank?: number; // ranking di snapshot baru
+};
+
+export type BrokerComparison = {
+  prev: BrokerActivity;
+  curr: BrokerActivity;
+  // === Sisi BUY ===
+  newAccumulators: BrokerCompareEntry[]; // absent → buy (broker baru muncul akumulasi)
+  flippedToBuy: BrokerCompareEntry[];    // sell → buy (berbalik akumulasi)
+  increasedBuy: BrokerCompareEntry[];    // buy → buy, value bertambah
+  decreasedBuy: BrokerCompareEntry[];    // buy → buy, value berkurang (tapi masih buy)
+  exitedBuy: BrokerCompareEntry[];       // buy → absent (selesai akumulasi / take profit)
+  // === Sisi SELL ===
+  newDistributors: BrokerCompareEntry[]; // absent → sell (broker baru muncul distribusi)
+  flippedToSell: BrokerCompareEntry[];   // buy → sell (berbalik distribusi)
+  increasedSell: BrokerCompareEntry[];   // sell → sell, abs bertambah
+  decreasedSell: BrokerCompareEntry[];   // sell → sell, abs berkurang
+  exitedSell: BrokerCompareEntry[];      // sell → absent (selesai jual / cover)
+  // === Highlight summary ===
+  topNewAccum?: BrokerCompareEntry;
+  topFlipBuy?: BrokerCompareEntry;
+  topNewDist?: BrokerCompareEntry;
+  topFlipSell?: BrokerCompareEntry;
+};
+
+function buildIndex(act: BrokerActivity): Map<string, { side: "buy" | "sell"; value: number; rank: number }> {
+  const idx = new Map<string, { side: "buy" | "sell"; value: number; rank: number }>();
+  for (const e of act.buys) {
+    idx.set(e.code.toUpperCase(), { side: "buy", value: Math.abs(e.value), rank: e.rank });
+  }
+  for (const e of act.sells) {
+    idx.set(e.code.toUpperCase(), { side: "sell", value: -Math.abs(e.value), rank: e.rank });
+  }
+  return idx;
+}
+
+export function compareBrokerActivity(
+  prev: BrokerActivity,
+  curr: BrokerActivity,
+): BrokerComparison {
+  const prevIdx = buildIndex(prev);
+  const currIdx = buildIndex(curr);
+
+  const allCodes = new Set<string>([...prevIdx.keys(), ...currIdx.keys()]);
+
+  const newAccumulators: BrokerCompareEntry[] = [];
+  const flippedToBuy: BrokerCompareEntry[] = [];
+  const increasedBuy: BrokerCompareEntry[] = [];
+  const decreasedBuy: BrokerCompareEntry[] = [];
+  const exitedBuy: BrokerCompareEntry[] = [];
+  const newDistributors: BrokerCompareEntry[] = [];
+  const flippedToSell: BrokerCompareEntry[] = [];
+  const increasedSell: BrokerCompareEntry[] = [];
+  const decreasedSell: BrokerCompareEntry[] = [];
+  const exitedSell: BrokerCompareEntry[] = [];
+
+  for (const code of allCodes) {
+    const p = prevIdx.get(code);
+    const c = currIdx.get(code);
+    const prevSide: CompareSide = p ? p.side : "absent";
+    const currSide: CompareSide = c ? c.side : "absent";
+    const prevValue = p ? p.value : 0;
+    const currValue = c ? c.value : 0;
+    const delta = currValue - prevValue;
+    const entry: BrokerCompareEntry = {
+      code,
+      info: getBrokerInfo(code),
+      prevSide,
+      currSide,
+      prevValue,
+      currValue,
+      delta,
+      absDelta: Math.abs(delta),
+      prevRank: p?.rank,
+      currRank: c?.rank,
+    };
+
+    if (prevSide === "absent" && currSide === "buy") {
+      newAccumulators.push(entry);
+    } else if (prevSide === "sell" && currSide === "buy") {
+      flippedToBuy.push(entry);
+    } else if (prevSide === "buy" && currSide === "buy") {
+      if (currValue > prevValue) increasedBuy.push(entry);
+      else if (currValue < prevValue) decreasedBuy.push(entry);
+      else increasedBuy.push(entry); // sama persis, masukkan ke "increased" saja
+    } else if (prevSide === "buy" && currSide === "absent") {
+      exitedBuy.push(entry);
+    } else if (prevSide === "absent" && currSide === "sell") {
+      newDistributors.push(entry);
+    } else if (prevSide === "buy" && currSide === "sell") {
+      flippedToSell.push(entry);
+    } else if (prevSide === "sell" && currSide === "sell") {
+      // sell→sell: kalau abs bertambah (currValue lebih negatif) = nambah dist
+      if (currValue < prevValue) increasedSell.push(entry);
+      else if (currValue > prevValue) decreasedSell.push(entry);
+      else increasedSell.push(entry);
+    } else if (prevSide === "sell" && currSide === "absent") {
+      exitedSell.push(entry);
+    }
+  }
+
+  // Sort masing-masing bucket berdasarkan dampak terbesar
+  const sortBuyersByCurr = (arr: BrokerCompareEntry[]) =>
+    arr.sort((a, b) => b.currValue - a.currValue);
+  const sortSellersByCurr = (arr: BrokerCompareEntry[]) =>
+    arr.sort((a, b) => a.currValue - b.currValue);
+  const sortByDeltaDesc = (arr: BrokerCompareEntry[]) =>
+    arr.sort((a, b) => b.delta - a.delta);
+  const sortByDeltaAsc = (arr: BrokerCompareEntry[]) =>
+    arr.sort((a, b) => a.delta - b.delta);
+
+  sortBuyersByCurr(newAccumulators);
+  sortBuyersByCurr(flippedToBuy);
+  sortByDeltaDesc(increasedBuy);
+  sortByDeltaAsc(decreasedBuy);
+  sortBuyersByCurr(exitedBuy); // urut by prev value sebenarnya, tapi pakai currValue=0
+  exitedBuy.sort((a, b) => b.prevValue - a.prevValue);
+
+  sortSellersByCurr(newDistributors);
+  sortSellersByCurr(flippedToSell);
+  sortByDeltaAsc(increasedSell);
+  sortByDeltaDesc(decreasedSell);
+  exitedSell.sort((a, b) => a.prevValue - b.prevValue);
+
+  return {
+    prev,
+    curr,
+    newAccumulators,
+    flippedToBuy,
+    increasedBuy,
+    decreasedBuy,
+    exitedBuy,
+    newDistributors,
+    flippedToSell,
+    increasedSell,
+    decreasedSell,
+    exitedSell,
+    topNewAccum: newAccumulators[0],
+    topFlipBuy: flippedToBuy[0],
+    topNewDist: newDistributors[0],
+    topFlipSell: flippedToSell[0],
+  };
+}

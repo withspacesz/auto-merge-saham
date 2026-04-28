@@ -3,10 +3,17 @@ import { Calendar, Check, Copy, Hash, X } from "lucide-react";
 import { ResultTable } from "@/components/ResultTable";
 import { SummaryCard } from "@/components/SummaryCard";
 import { TopBrokerCard } from "@/components/TopBrokerCard";
+import { BrokerCompareCard } from "@/components/BrokerCompareCard";
 import { mergeInputs, type MergedTable } from "@/lib/merger";
-import { parseBrokerActivity, analyzeBrokerActivity, type BrokerAnalysis } from "@/lib/parser-broker";
+import {
+  parseBrokerActivity,
+  analyzeBrokerActivity,
+  compareBrokerActivity,
+  type BrokerAnalysis,
+  type BrokerComparison,
+} from "@/lib/parser-broker";
 
-type SourceKey = "data" | "nbsa" | "mf" | "rcm" | "broker";
+type SourceKey = "data" | "nbsa" | "mf" | "rcm" | "broker" | "brokerPrev";
 
 const SOURCES: { key: SourceKey; label: string; tag: string; cmdBase: string; hint: string }[] = [
   {
@@ -39,10 +46,17 @@ const SOURCES: { key: SourceKey; label: string; tag: string; cmdBase: string; hi
   },
   {
     key: "broker",
-    label: "Broker Activity",
-    tag: "BROKER",
-    cmdBase: "/broker",
-    hint: "Paste data Broker Summary dari @chart_saham_bot — hari terakhir saja (NET BUY / NET SELL)",
+    label: "Broker (Sekarang)",
+    tag: "BROKER NOW",
+    cmdBase: "/broksum",
+    hint: "Paste data Broker Summary periode SEKARANG (mis. 24-04 s.d 27-04 — kumulatif beberapa hari)",
+  },
+  {
+    key: "brokerPrev",
+    label: "Broker (Sebelumnya)",
+    tag: "BROKER PREV",
+    cmdBase: "/broksum",
+    hint: "Opsional. Paste snapshot broker SEBELUMNYA (mis. 24-04 s.d 24-04 single day) untuk lihat siapa yang baru akumulasi / berbalik posisi",
   },
 ];
 
@@ -106,7 +120,25 @@ dari tanggal 17-4-2026 s/d 24-4-2026
 17-04-2026 15x    96  -8.82   8.00M   96.45Jt   -2.65M     -2.55M 🔴  -88
 -------------------------------------------------------------------------➕
            40x    93  -2.20  23.00M    1.33M    -4.09M    -2.76M 🔴  -264`,
-  broker: `/BROKER 🗓28-04-2026 || ⏰09:08:57 Wib. ®️@chart_saham_bot
+  broker: `/BROKSUM 🗓28-04-2026 || ⏰11:33:15 Wib. ®️@chart_saham_bot
+Halo Kak Bang Tra🥰, Berikut adalah Data
+          Broker Summary ESIP  Regular Board (RG)
+            Tanggal 2026-04-24 s.d 2026-04-27
+-----------------------------------------------------------------------
+   🟩🟩🟩🟩 NET BUY 🟩🟩🟩🟩      🟥🟥🟥🟥 NET SELL 🟥🟥🟥🟥
+ No|KODE|B.Val| B.Lot| B.Fq| B.Avg| No|KODE| S.Val| S.Lot| S.fq| S.Avg|
+-----------------------------------------------------------------------
+ 1. MG   2.6M  225.2rb   2rb   114   1. CC  -1.7M  -152.6rb   3rb   109
+ 2. AK   1.8M  160.6rb   1rb   109   2. KK -938.0Jt -83.0rb   1rb   108
+ 3. XA 460.0Jt  45.3rb 568     112   3. XC -790.0Jt -75.1rb   2rb   110
+ 4. OD 400.8Jt  36.5rb 554     109   4. XL -612.5Jt -60.6rb  23rb   110
+ 5. CP 389.7Jt  36.4rb   2rb   112   5. GR -507.2Jt -43.8rb 199     110
+ 6. BK 145.9Jt  13.9rb 106     105   6. NI -334.1Jt -28.6rb 537     111
+ 7. DR  70.3Jt   5.3rb 128     113   7. BQ -196.1Jt -16.5rb   1rb   110
+ 8. YU  55.6Jt   4.8rb 168     116   8. LG -148.0Jt -13.8rb 113     107
+ 9. YP  39.2Jt  13.2rb   6rb   111   9. DH -129.5Jt -11.8rb  96     107
+10. EP  21.4Jt   1.5rb 631     111  10. DX -120.9Jt -10.6rb  36     114`,
+  brokerPrev: `/BROKSUM 🗓28-04-2026 || ⏰11:32:55 Wib. ®️@chart_saham_bot
 Halo Kak Bang Tra🥰, Berikut adalah Data
           Broker Summary ESIP  Regular Board (RG)
             Tanggal 2026-04-24 s.d 2026-04-24
@@ -141,6 +173,7 @@ export function HomePage() {
     mf: "",
     rcm: "",
     broker: "",
+    brokerPrev: "",
   });
   const [submitted, setSubmitted] = useState<Record<SourceKey, string> | null>(null);
   const [showResult, setShowResult] = useState(false);
@@ -153,7 +186,7 @@ export function HomePage() {
   };
 
   const handleReset = () => {
-    setData({ data: "", nbsa: "", mf: "", rcm: "", broker: "" });
+    setData({ data: "", nbsa: "", mf: "", rcm: "", broker: "", brokerPrev: "" });
     setSubmitted(null);
     setSymbol("");
     setShowResult(false);
@@ -198,6 +231,14 @@ export function HomePage() {
     if (!submitted) return null;
     const parsed = parseBrokerActivity(submitted.broker ?? "");
     return parsed ? analyzeBrokerActivity(parsed) : null;
+  }, [submitted]);
+
+  const brokerComparison = useMemo<BrokerComparison | null>(() => {
+    if (!submitted) return null;
+    const curr = parseBrokerActivity(submitted.broker ?? "");
+    const prev = parseBrokerActivity(submitted.brokerPrev ?? "");
+    if (!curr || !prev) return null;
+    return compareBrokerActivity(prev, curr);
   }, [submitted]);
 
   return (
@@ -371,12 +412,13 @@ export function HomePage() {
 
       </div>
 
-      {showResult && (merged || brokerAnalysis) && submitted && (
+      {showResult && (merged || brokerAnalysis || brokerComparison) && submitted && (
         <ResultModal
           merged={merged}
           symbol={symbol}
           filledCount={filledCount}
           brokerAnalysis={brokerAnalysis}
+          brokerComparison={brokerComparison}
           onClose={handleCloseResult}
         />
       )}
@@ -389,23 +431,28 @@ function ResultModal({
   symbol,
   filledCount,
   brokerAnalysis,
+  brokerComparison,
   onClose,
 }: {
   merged: MergedTable | null;
   symbol: string;
   filledCount: number;
   brokerAnalysis: BrokerAnalysis | null;
+  brokerComparison: BrokerComparison | null;
   onClose: () => void;
 }) {
   const outerRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
-  const [tab, setTab] = useState<"rekomendasi" | "top-broker">("rekomendasi");
+  const [tab, setTab] = useState<"rekomendasi" | "top-broker" | "bandingkan">(
+    brokerComparison ? "bandingkan" : "rekomendasi",
+  );
 
-  // Kalau broker analysis tidak ada, paksa tab kembali ke rekomendasi.
+  // Kalau tab yang dipilih tidak tersedia, jatuhkan ke rekomendasi.
   useEffect(() => {
     if (!brokerAnalysis && tab === "top-broker") setTab("rekomendasi");
-  }, [brokerAnalysis, tab]);
+    if (!brokerComparison && tab === "bandingkan") setTab("rekomendasi");
+  }, [brokerAnalysis, brokerComparison, tab]);
 
   useLayoutEffect(() => {
     const inner = innerRef.current;
@@ -455,7 +502,7 @@ function ResultModal({
       ro.disconnect();
       window.removeEventListener("resize", recalc);
     };
-  }, [merged, symbol, brokerAnalysis, tab]);
+  }, [merged, symbol, brokerAnalysis, brokerComparison, tab]);
 
   return (
     <div
@@ -502,9 +549,17 @@ function ResultModal({
             }}
             className="space-y-3"
           >
-            {(merged || brokerAnalysis) && (
+            {(merged || brokerAnalysis || brokerComparison) && (
               <div>
                 <div className="flex items-center gap-1 mb-2">
+                  {brokerComparison && (
+                    <TabButton
+                      active={tab === "bandingkan"}
+                      onClick={() => setTab("bandingkan")}
+                    >
+                      Bandingkan Broker
+                    </TabButton>
+                  )}
                   <TabButton
                     active={tab === "rekomendasi"}
                     onClick={() => setTab("rekomendasi")}
@@ -520,6 +575,9 @@ function ResultModal({
                     </TabButton>
                   )}
                 </div>
+                {tab === "bandingkan" && brokerComparison && (
+                  <BrokerCompareCard comparison={brokerComparison} />
+                )}
                 {tab === "rekomendasi" && merged && (
                   <SummaryCard merged={merged} brokerAnalysis={brokerAnalysis} />
                 )}
