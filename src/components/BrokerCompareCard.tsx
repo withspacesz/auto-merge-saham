@@ -1,4 +1,14 @@
-import { ArrowRight, GitCompareArrows, Sparkles, TrendingDown, TrendingUp, UserMinus, UserPlus } from "lucide-react";
+import { useState } from "react";
+import {
+  ArrowRight,
+  ChevronDown,
+  GitCompareArrows,
+  Sparkles,
+  TrendingDown,
+  TrendingUp,
+  UserMinus,
+  UserPlus,
+} from "lucide-react";
 import {
   type BrokerComparison,
   type BrokerCompareEntry,
@@ -93,7 +103,7 @@ export function BrokerCompareCard({ comparison }: Props) {
 
   return (
     <div className="rounded-xl border border-border bg-card overflow-hidden">
-      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2 border-b border-border bg-gradient-to-r from-amber-500/5 via-emerald-500/5 to-rose-500/5">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 border-b border-border bg-gradient-to-r from-amber-500/5 via-emerald-500/5 to-rose-500/5">
         <div className="flex items-center gap-2">
           <GitCompareArrows className="h-4 w-4 text-amber-300" />
           <h3 className="text-sm font-semibold text-amber-200 tracking-wide">
@@ -101,7 +111,9 @@ export function BrokerCompareCard({ comparison }: Props) {
           </h3>
         </div>
         <span className="text-[11px] text-muted-foreground font-mono">
-          {prev.date || "snapshot lama"} <ArrowRight className="inline h-3 w-3 mx-1" /> {curr.date || "snapshot baru"}
+          {prev.date || "snapshot lama"}{" "}
+          <ArrowRight className="inline h-3 w-3 mx-1" />{" "}
+          {curr.date || "snapshot baru"}
         </span>
       </div>
 
@@ -119,6 +131,7 @@ export function BrokerCompareCard({ comparison }: Props) {
                 icon={<Sparkles className="h-4 w-4" />}
                 entries={newAccumulators}
                 variant="newBuy"
+                defaultExpanded
               />
             )}
             {flippedToBuy.length > 0 && (
@@ -129,6 +142,7 @@ export function BrokerCompareCard({ comparison }: Props) {
                 icon={<TrendingUp className="h-4 w-4" />}
                 entries={flippedToBuy}
                 variant="flipBuy"
+                defaultExpanded
               />
             )}
             {increasedBuy.length > 0 && (
@@ -139,6 +153,7 @@ export function BrokerCompareCard({ comparison }: Props) {
                 icon={<TrendingUp className="h-4 w-4" />}
                 entries={increasedBuy}
                 variant="increasedBuy"
+                defaultExpanded
               />
             )}
           </div>
@@ -336,6 +351,10 @@ type Variant =
   | "decreasedSell"
   | "exitedSell";
 
+function isBuySide(variant: Variant): boolean {
+  return variant.endsWith("Buy");
+}
+
 function getColumnLabel(variant: Variant): React.ReactNode {
   if (variant === "newBuy" || variant === "newSell") {
     return (
@@ -369,6 +388,7 @@ function BucketSection({
   icon,
   entries,
   variant,
+  defaultExpanded = false,
 }: {
   title: string;
   subtitle: string;
@@ -376,7 +396,10 @@ function BucketSection({
   icon: React.ReactNode;
   entries: BrokerCompareEntry[];
   variant: Variant;
+  defaultExpanded?: boolean;
 }) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
+
   const headerColor =
     tone === "emerald"
       ? "text-emerald-300"
@@ -390,51 +413,90 @@ function BucketSection({
 
   const headerBg =
     tone === "emerald"
-      ? "bg-emerald-500/10 border-emerald-500/30"
+      ? "bg-emerald-500/10 border-emerald-500/40 hover:bg-emerald-500/15"
       : tone === "emerald-soft"
-        ? "bg-emerald-500/5 border-emerald-500/20"
+        ? "bg-emerald-500/5 border-emerald-500/25 hover:bg-emerald-500/10"
         : tone === "rose"
-          ? "bg-rose-500/10 border-rose-500/30"
+          ? "bg-rose-500/10 border-rose-500/40 hover:bg-rose-500/15"
           : tone === "rose-soft"
-            ? "bg-rose-500/5 border-rose-500/20"
-            : "bg-muted/20 border-border";
+            ? "bg-rose-500/5 border-rose-500/25 hover:bg-rose-500/10"
+            : "bg-muted/20 border-border hover:bg-muted/30";
+
+  const codeColor = isBuySide(variant) ? "text-emerald-300" : "text-rose-300";
+  const codeRing = isBuySide(variant)
+    ? "ring-emerald-500/30"
+    : "ring-rose-500/30";
 
   return (
     <div className="bg-card">
-      <div className={`flex items-center gap-2 px-3 py-2 border-l-2 ${headerBg}`}>
-        <span className={headerColor}>{icon}</span>
+      <button
+        type="button"
+        onClick={() => setExpanded((e) => !e)}
+        aria-expanded={expanded}
+        className={`group w-full flex items-start gap-2.5 px-3 py-2.5 border-l-2 ${headerBg} transition-colors text-left`}
+      >
+        <span className={`${headerColor} mt-0.5 shrink-0`}>{icon}</span>
         <div className="min-w-0 flex-1">
-          <div className={`text-[12px] font-semibold uppercase tracking-wide ${headerColor}`}>
-            {title}
-            <span className="ml-2 text-[10px] font-mono text-muted-foreground">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span
+              className={`text-[12px] font-semibold uppercase tracking-wide ${headerColor}`}
+            >
+              {title}
+            </span>
+            <span className="text-[10px] font-mono text-muted-foreground">
               ({entries.length})
             </span>
           </div>
-          <div className="text-[10px] text-muted-foreground">{subtitle}</div>
+          {expanded ? (
+            <div className="mt-0.5 text-[10px] text-muted-foreground">
+              {subtitle}
+            </div>
+          ) : (
+            <div className="mt-1.5 flex flex-wrap gap-1">
+              {entries.map((e) => (
+                <span
+                  key={e.code}
+                  title={`${e.code} — ${e.info.name}`}
+                  className={`inline-block font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-background/50 ring-1 ${codeRing} ${codeColor}`}
+                >
+                  {e.code}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
-      </div>
+        <ChevronDown
+          className={`h-4 w-4 mt-0.5 shrink-0 text-muted-foreground/70 transition-transform duration-200 ${
+            expanded ? "rotate-180" : ""
+          }`}
+        />
+      </button>
 
-      {/* Sub-judul kolom: jelaskan arti angka di kolom kanan */}
-      <div className="flex items-center gap-2 px-3 py-1.5 border-b border-border/60 bg-muted/10">
-        <span className="shrink-0 inline-block min-w-[2.5rem] text-[9px] font-mono uppercase tracking-wider text-muted-foreground/60">
-          Kode
-        </span>
-        <span className="shrink-0 text-[9px] font-mono uppercase tracking-wider text-muted-foreground/60">
-          Tipe
-        </span>
-        <span className="min-w-0 flex-1 text-[9px] font-mono uppercase tracking-wider text-muted-foreground/60">
-          Nama Broker
-        </span>
-        <span className="shrink-0 text-[9px] font-mono uppercase tracking-wider">
-          {getColumnLabel(variant)}
-        </span>
-      </div>
+      {expanded && (
+        <>
+          {/* Sub-judul kolom: jelaskan arti angka di kolom kanan */}
+          <div className="flex items-center gap-2 px-3 py-1.5 border-b border-border/60 bg-muted/10">
+            <span className="shrink-0 inline-block min-w-[2.5rem] text-[9px] font-mono uppercase tracking-wider text-muted-foreground/60">
+              Kode
+            </span>
+            <span className="shrink-0 text-[9px] font-mono uppercase tracking-wider text-muted-foreground/60">
+              Tipe
+            </span>
+            <span className="min-w-0 flex-1 text-[9px] font-mono uppercase tracking-wider text-muted-foreground/60">
+              Nama Broker
+            </span>
+            <span className="shrink-0 text-[9px] font-mono uppercase tracking-wider">
+              {getColumnLabel(variant)}
+            </span>
+          </div>
 
-      <ul className="divide-y divide-border/60">
-        {entries.map((e) => (
-          <CompareRow key={e.code} entry={e} variant={variant} />
-        ))}
-      </ul>
+          <ul className="divide-y divide-border/60">
+            {entries.map((e) => (
+              <CompareRow key={e.code} entry={e} variant={variant} />
+            ))}
+          </ul>
+        </>
+      )}
     </div>
   );
 }
@@ -446,8 +508,7 @@ function CompareRow({
   entry: BrokerCompareEntry;
   variant: Variant;
 }) {
-  const isBuyVariant = variant.endsWith("Buy") || variant === "newBuy" || variant === "flipBuy";
-  const codeColor = isBuyVariant ? "text-emerald-300" : "text-rose-300";
+  const codeColor = isBuySide(variant) ? "text-emerald-300" : "text-rose-300";
 
   let valueLine: React.ReactNode;
   if (variant === "newBuy" || variant === "newSell") {
