@@ -119,115 +119,117 @@ export function BrokerCompareCard({ comparison }: Props) {
 
       <NarrativeBanner comparison={comparison} totalSignals={totalSignals} />
 
-      {hasPrimary && (
-        <div className="grid grid-cols-[repeat(auto-fit,minmax(300px,1fr))] gap-3 p-3 bg-background/30">
-          {newAccumulators.length > 0 && (
-            <BucketSection
-              title="Mulai Akumulasi"
-              subtitle="Broker baru muncul di NET BUY (sebelumnya tidak ada)"
-              tone="emerald"
-              icon={<Sparkles className="h-4 w-4" />}
-              entries={newAccumulators}
-              variant="newBuy"
-              defaultExpanded
-            />
-          )}
-          {newDistributors.length > 0 && (
-            <BucketSection
-              title="Mulai Distribusi"
-              subtitle="Broker baru muncul di NET SELL (sebelumnya tidak ada)"
-              tone="rose"
-              icon={<UserPlus className="h-4 w-4" />}
-              entries={newDistributors}
-              variant="newSell"
-              defaultExpanded
-            />
-          )}
-          {flippedToBuy.length > 0 && (
-            <BucketSection
-              title="Berbalik Akum (SELL → BUY)"
-              subtitle="Sebelumnya jualan, sekarang malah memborong"
-              tone="emerald"
-              icon={<TrendingUp className="h-4 w-4" />}
-              entries={flippedToBuy}
-              variant="flipBuy"
-            />
-          )}
-          {flippedToSell.length > 0 && (
-            <BucketSection
-              title="Berbalik Dist (BUY → SELL)"
-              subtitle="Sebelumnya borong, sekarang malah jualan"
-              tone="rose"
-              icon={<TrendingDown className="h-4 w-4" />}
-              entries={flippedToSell}
-              variant="flipSell"
-            />
-          )}
-          {increasedBuy.length > 0 && (
-            <BucketSection
-              title="Tambah Akumulasi"
-              subtitle="Broker buy → buy dengan posisi membesar"
-              tone="emerald-soft"
-              icon={<TrendingUp className="h-4 w-4" />}
-              entries={increasedBuy}
-              variant="increasedBuy"
-            />
-          )}
-          {increasedSell.length > 0 && (
-            <BucketSection
-              title="Tambah Distribusi"
-              subtitle="Broker sell → sell dengan posisi jual membesar"
-              tone="rose-soft"
-              icon={<TrendingDown className="h-4 w-4" />}
-              entries={increasedSell}
-              variant="increasedSell"
-            />
-          )}
-        </div>
-      )}
+      {(hasPrimary || hasSecondary) && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-3 bg-background/30 items-start">
+          {/* KOLOM AKUMULASI (BUY) */}
+          <div className="flex flex-col gap-3">
+            {newAccumulators.length > 0 && (
+              <BucketSection
+                title="Mulai Akumulasi"
+                subtitle="Broker baru muncul di NET BUY (sebelumnya tidak ada)"
+                tone="emerald"
+                icon={<Sparkles className="h-4 w-4" />}
+                entries={newAccumulators}
+                variant="newBuy"
+                defaultExpanded
+              />
+            )}
+            {flippedToBuy.length > 0 && (
+              <BucketSection
+                title="Berbalik Akum (SELL → BUY)"
+                subtitle="Sebelumnya jualan, sekarang malah memborong"
+                tone="emerald"
+                icon={<TrendingUp className="h-4 w-4" />}
+                entries={flippedToBuy}
+                variant="flipBuy"
+              />
+            )}
+            {increasedBuy.length > 0 && (
+              <BucketSection
+                title="Tambah Akumulasi"
+                subtitle="Broker buy → buy dengan posisi membesar"
+                tone="emerald-soft"
+                icon={<TrendingUp className="h-4 w-4" />}
+                entries={increasedBuy}
+                variant="increasedBuy"
+              />
+            )}
+            {decreasedBuy.length > 0 && (
+              <BucketSection
+                title="Akum Berkurang"
+                subtitle="Masih buy tapi lot/value-nya menyusut"
+                tone="muted"
+                icon={<TrendingDown className="h-4 w-4" />}
+                entries={decreasedBuy}
+                variant="decreasedBuy"
+              />
+            )}
+            {exitedBuy.length > 0 && (
+              <BucketSection
+                title="Selesai Akumulasi"
+                subtitle="Sebelumnya buy, sekarang hilang dari Top 10"
+                tone="muted"
+                icon={<UserMinus className="h-4 w-4" />}
+                entries={exitedBuy}
+                variant="exitedBuy"
+              />
+            )}
+          </div>
 
-      {hasSecondary && (
-        <div className="grid grid-cols-[repeat(auto-fit,minmax(300px,1fr))] gap-3 p-3 pt-0 bg-background/30">
-          {decreasedBuy.length > 0 && (
-            <BucketSection
-              title="Akum Berkurang"
-              subtitle="Masih buy tapi lot/value-nya menyusut"
-              tone="muted"
-              icon={<TrendingDown className="h-4 w-4" />}
-              entries={decreasedBuy}
-              variant="decreasedBuy"
-            />
-          )}
-          {decreasedSell.length > 0 && (
-            <BucketSection
-              title="Dist Berkurang"
-              subtitle="Masih sell tapi lot/value-nya menyusut"
-              tone="muted"
-              icon={<TrendingUp className="h-4 w-4" />}
-              entries={decreasedSell}
-              variant="decreasedSell"
-            />
-          )}
-          {exitedBuy.length > 0 && (
-            <BucketSection
-              title="Selesai Akumulasi"
-              subtitle="Sebelumnya buy, sekarang hilang dari Top 10"
-              tone="muted"
-              icon={<UserMinus className="h-4 w-4" />}
-              entries={exitedBuy}
-              variant="exitedBuy"
-            />
-          )}
-          {exitedSell.length > 0 && (
-            <BucketSection
-              title="Selesai Distribusi"
-              subtitle="Sebelumnya sell, sekarang hilang dari Top 10"
-              tone="muted"
-              icon={<UserMinus className="h-4 w-4" />}
-              entries={exitedSell}
-              variant="exitedSell"
-            />
-          )}
+          {/* KOLOM DISTRIBUSI (SELL) */}
+          <div className="flex flex-col gap-3">
+            {newDistributors.length > 0 && (
+              <BucketSection
+                title="Mulai Distribusi"
+                subtitle="Broker baru muncul di NET SELL (sebelumnya tidak ada)"
+                tone="rose"
+                icon={<UserPlus className="h-4 w-4" />}
+                entries={newDistributors}
+                variant="newSell"
+                defaultExpanded
+              />
+            )}
+            {flippedToSell.length > 0 && (
+              <BucketSection
+                title="Berbalik Dist (BUY → SELL)"
+                subtitle="Sebelumnya borong, sekarang malah jualan"
+                tone="rose"
+                icon={<TrendingDown className="h-4 w-4" />}
+                entries={flippedToSell}
+                variant="flipSell"
+              />
+            )}
+            {increasedSell.length > 0 && (
+              <BucketSection
+                title="Tambah Distribusi"
+                subtitle="Broker sell → sell dengan posisi jual membesar"
+                tone="rose-soft"
+                icon={<TrendingDown className="h-4 w-4" />}
+                entries={increasedSell}
+                variant="increasedSell"
+              />
+            )}
+            {decreasedSell.length > 0 && (
+              <BucketSection
+                title="Dist Berkurang"
+                subtitle="Masih sell tapi lot/value-nya menyusut"
+                tone="muted"
+                icon={<TrendingUp className="h-4 w-4" />}
+                entries={decreasedSell}
+                variant="decreasedSell"
+              />
+            )}
+            {exitedSell.length > 0 && (
+              <BucketSection
+                title="Selesai Distribusi"
+                subtitle="Sebelumnya sell, sekarang hilang dari Top 10"
+                tone="muted"
+                icon={<UserMinus className="h-4 w-4" />}
+                entries={exitedSell}
+                variant="exitedSell"
+              />
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -413,7 +415,7 @@ function BucketSection({
     : "ring-rose-500/30";
 
   return (
-    <div className="bg-card rounded-xl border border-border/60 shadow-md hover:shadow-lg hover:border-border transition-all overflow-hidden self-start">
+    <div className="bg-card rounded-xl border border-border/60 shadow-md hover:shadow-lg hover:border-border transition-all overflow-hidden">
       <button
         type="button"
         onClick={() => setExpanded((e) => !e)}
