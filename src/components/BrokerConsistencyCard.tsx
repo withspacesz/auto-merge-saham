@@ -334,6 +334,250 @@ function CandidateRow({ c }: { c: Candidate }) {
   );
 }
 
+// ===== LAPIS 1: Controller Mingguan =====
+// Identifikasi siapa yang paling "in control" sepekan terakhir.
+// Skor = weeklyValue * 1 + bonus avg termurah (relatif ke median) + bonus
+// kalau hari ini masih aktif beli (= konfirmasi).
+type Controller = {
+  entry: ConsistencyEntry;
+  rank: number;
+  todayStatus: "lanjut" | "pause" | "berbalik";
+  todayDetail: string;
+};
+
+function buildControllers(consistency: ConsistencyAnalysis): Controller[] {
+  // Pool: hanya broker yang BELI mingguan signifikan
+  const pool: ConsistencyEntry[] = [
+    ...consistency.konsistenAkum,
+    ...consistency.selesaiAkum,
+  ].filter((e) => e.weeklyValue > 0);
+  if (pool.length === 0) return [];
+
+  // Median avg utk normalisasi
+  const avgs = pool
+    .map((e) => e.weeklyAvg ?? e.dailyAvg)
+    .filter((a): a is number => a != null);
+  const medianAvg = avgs.length > 0
+    ? [...avgs].sort((a, b) => a - b)[Math.floor(avgs.length / 2)]
+    : 0;
+
+  const scored = pool.map((entry) => {
+    const wv = entry.weeklyValue;
+    const avg = entry.weeklyAvg ?? entry.dailyAvg ?? 0;
+    // Bonus avg murah: makin di bawah median, makin tinggi
+    const avgBonus = medianAvg > 0 && avg > 0
+      ? wv * Math.max(0, (medianAvg - avg) / medianAvg) * 0.5
+      : 0;
+    // Bonus konfirmasi harian
+    const dailyBonus = entry.dailyValue > 0 ? wv * 0.3 : 0;
+    const score = wv + avgBonus + dailyBonus;
+    return { entry, score };
+  });
+
+  scored.sort((a, b) => b.score - a.score);
+  const top = scored.slice(0, 3);
+
+  return top.map((s, i) => {
+    const e = s.entry;
+    let status: Controller["todayStatus"];
+    let detail: string;
+    if (e.dailyValue > 0) {
+      status = "lanjut";
+      detail = `Lanjut beli hari ini ${fmtIDR(e.dailyValue)}${e.dailyAvg ? ` di avg ${e.dailyAvg}` : ""} — konfirmasi akumulasi berlanjut.`;
+    } else if (e.dailyValue === 0) {
+      status = "pause";
+      detail = `Tidak aktif hari ini. Posisi mingguan ${fmtIDR(e.weeklyValue)} sudah dibangun — kemungkinan hold / pause sementara.`;
+    } else {
+      status = "berbalik";
+      detail = `🚨 Berbalik jual hari ini ${fmtIDR(e.dailyValue)}${e.dailyAvg ? ` di avg ${e.dailyAvg}` : ""} — waspada, controller utama mulai keluar.`;
+    }
+    return { entry: e, rank: i + 1, todayStatus: status, todayDetail: detail };
+  });
+}
+
+function ControllerRow({ c }: { c: Controller }) {
+  const e = c.entry;
+  const statusCls =
+    c.todayStatus === "lanjut"
+      ? "bg-emerald-500/20 text-emerald-200 border-emerald-500/40"
+      : c.todayStatus === "pause"
+        ? "bg-amber-500/20 text-amber-200 border-amber-500/40"
+        : "bg-rose-500/25 text-rose-200 border-rose-500/50";
+  const statusIcon =
+    c.todayStatus === "lanjut" ? "✅" : c.todayStatus === "pause" ? "⏸" : "🚨";
+  const statusLabel =
+    c.todayStatus === "lanjut"
+      ? "Lanjut akum"
+      : c.todayStatus === "pause"
+        ? "Pause / hold"
+        : "Berbalik jual";
+
+  const rankRing =
+    c.rank === 1
+      ? "bg-emerald-500/25 border-emerald-400/60 text-emerald-200"
+      : c.rank === 2
+        ? "bg-emerald-500/15 border-emerald-400/40 text-emerald-200"
+        : "bg-emerald-500/10 border-emerald-400/30 text-emerald-300";
+
+  return (
+    <div className="rounded-lg border border-emerald-500/15 bg-emerald-500/[0.04] p-3">
+      <div className="flex items-center gap-3 flex-wrap">
+        <div
+          className={`flex-shrink-0 w-8 h-8 rounded-full border flex items-center justify-center text-sm font-bold ${rankRing}`}
+        >
+          {c.rank}
+        </div>
+        <div className="flex items-baseline gap-2 min-w-0">
+          <span className="text-xl font-extrabold text-white tracking-tight">{e.code}</span>
+          <span className="text-[11px] md:text-xs text-slate-400 truncate max-w-[180px]">{e.info.name}</span>
+        </div>
+        <span className="inline-flex items-center px-2 py-0.5 rounded border text-[11px] md:text-xs font-semibold bg-emerald-500/20 text-emerald-200 border-emerald-500/40 whitespace-nowrap">
+          Mingguan {fmtIDR(e.weeklyValue)}
+        </span>
+        {e.weeklyAvg && (
+          <span className="text-[11px] md:text-xs text-slate-400 font-mono whitespace-nowrap">
+            avg {e.weeklyAvg}
+          </span>
+        )}
+        <span
+          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[11px] md:text-xs font-semibold whitespace-nowrap ml-auto ${statusCls}`}
+        >
+          {statusIcon} {statusLabel}
+        </span>
+      </div>
+      <div className="mt-2 md:pl-11 text-[13px] md:text-sm text-slate-200 leading-relaxed">
+        {c.todayDetail}
+      </div>
+    </div>
+  );
+}
+
+// ===== Distributor Terbesar (highlight bahaya) =====
+type Distributor = {
+  entry: ConsistencyEntry;
+  rank: number;
+  severity: "berat" | "sedang" | "ringan";
+  detail: string;
+};
+
+function buildTopDistributors(consistency: ConsistencyAnalysis): Distributor[] {
+  // Pool: distributor yang JUAL mingguan (weeklyValue < 0 atau label dist)
+  const pool: ConsistencyEntry[] = [
+    ...consistency.konsistenDist,
+    ...consistency.flipWarning,
+    ...consistency.newOrFreshDist,
+  ].filter((e) => e.weeklyValue < 0);
+  if (pool.length === 0) return [];
+
+  // Sort by absolute weekly value (paling besar dulu)
+  const sorted = [...pool].sort((a, b) => Math.abs(b.weeklyValue) - Math.abs(a.weeklyValue));
+  const top = sorted.slice(0, 3);
+  const biggest = Math.abs(top[0].weeklyValue);
+
+  return top.map((e, i) => {
+    const abs = Math.abs(e.weeklyValue);
+    // Severity relatif ke distributor terbesar
+    let severity: Distributor["severity"];
+    if (i === 0 || abs >= biggest * 0.7) severity = "berat";
+    else if (abs >= biggest * 0.35) severity = "sedang";
+    else severity = "ringan";
+
+    let detail: string;
+    if (e.dailyValue < 0) {
+      detail = `Masih aktif jual hari ini ${fmtIDR(e.dailyValue)}${e.dailyAvg ? ` di avg ${e.dailyAvg}` : ""} — tekanan jual belum berhenti, akumulasi bisa terus diserap tanpa harga naik.`;
+    } else if (e.dailyValue === 0) {
+      detail = `Hari ini tidak aktif — pantau besok, kalau muncul lagi tekanan jual lanjut. Selama belum berhenti total, harga sulit lepas.`;
+    } else {
+      detail = `Hari ini berbalik beli ${fmtIDR(e.dailyValue)} — sinyal awal distributor mulai berhenti, perhatikan beberapa hari ke depan.`;
+    }
+    return { entry: e, rank: i + 1, severity, detail };
+  });
+}
+
+function DistributorRow({ d }: { d: Distributor }) {
+  const e = d.entry;
+  const sevCls =
+    d.severity === "berat"
+      ? "bg-rose-500/25 text-rose-200 border-rose-500/50"
+      : d.severity === "sedang"
+        ? "bg-rose-500/15 text-rose-200 border-rose-500/35"
+        : "bg-rose-500/10 text-rose-300 border-rose-500/25";
+  const sevLabel = d.severity === "berat" ? "BAHAYA" : d.severity === "sedang" ? "SEDANG" : "RINGAN";
+  const dailyTone =
+    e.dailyValue < 0
+      ? "bg-rose-500/20 text-rose-200 border-rose-500/40"
+      : e.dailyValue === 0
+        ? "bg-slate-500/20 text-slate-300 border-slate-500/40"
+        : "bg-emerald-500/20 text-emerald-200 border-emerald-500/40";
+  const dailyText =
+    e.dailyValue < 0
+      ? `Hari ini jual ${fmtIDR(e.dailyValue)}`
+      : e.dailyValue === 0
+        ? "Hari ini tidak aktif"
+        : `Hari ini balik beli ${fmtIDR(e.dailyValue)}`;
+
+  return (
+    <div className="rounded-lg border border-rose-500/20 bg-rose-500/[0.04] p-3">
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-rose-500/20 border border-rose-500/50 flex items-center justify-center text-rose-200 text-sm font-bold">
+          {d.rank}
+        </div>
+        <div className="flex items-baseline gap-2 min-w-0">
+          <span className="text-xl font-extrabold text-white tracking-tight">{e.code}</span>
+          <span className="text-[11px] md:text-xs text-slate-400 truncate max-w-[180px]">{e.info.name}</span>
+        </div>
+        <span className={`inline-flex items-center px-2 py-0.5 rounded border text-[11px] md:text-xs font-bold uppercase tracking-wider whitespace-nowrap ${sevCls}`}>
+          {sevLabel}
+        </span>
+        <span className="inline-flex items-center px-2 py-0.5 rounded border text-[11px] md:text-xs font-semibold bg-rose-500/20 text-rose-200 border-rose-500/40 whitespace-nowrap">
+          Mingguan {fmtIDR(e.weeklyValue)}
+        </span>
+        {e.weeklyAvg && (
+          <span className="text-[11px] md:text-xs text-slate-400 font-mono whitespace-nowrap">
+            avg {e.weeklyAvg}
+          </span>
+        )}
+        <span className={`inline-flex items-center px-2 py-0.5 rounded border text-[11px] md:text-xs font-semibold whitespace-nowrap ml-auto ${dailyTone}`}>
+          {dailyText}
+        </span>
+      </div>
+      <div className="mt-2 md:pl-11 text-[13px] md:text-sm text-slate-200 leading-relaxed">
+        {d.detail}
+      </div>
+    </div>
+  );
+}
+
+function SectionHeader({
+  badge,
+  title,
+  subtitle,
+  tone,
+}: {
+  badge: string;
+  title: string;
+  subtitle?: string;
+  tone: "emerald" | "rose" | "amber";
+}) {
+  const cls =
+    tone === "emerald"
+      ? "text-emerald-300 border-emerald-500/30"
+      : tone === "rose"
+        ? "text-rose-300 border-rose-500/30"
+        : "text-amber-300 border-amber-500/30";
+  return (
+    <div className={`flex items-baseline gap-2 flex-wrap border-l-2 pl-3 ${cls}`}>
+      <span className={`text-[10px] md:text-[11px] font-bold uppercase tracking-widest ${cls}`}>
+        {badge}
+      </span>
+      <h4 className="text-sm md:text-base font-bold text-foreground">{title}</h4>
+      {subtitle && (
+        <span className="text-[11px] md:text-xs text-muted-foreground">— {subtitle}</span>
+      )}
+    </div>
+  );
+}
+
 export function BrokerConsistencyCard({
   analysis,
   merged,
@@ -352,18 +596,25 @@ export function BrokerConsistencyCard({
     analysis.daily.symbol ||
     "saham ini";
 
-  // Distribusi singkat
-  const topDist = analysis.konsistenDist.slice(0, 5);
-  const stoppedDist = analysis.stoppedDist.slice(0, 5);
+  const controllers = buildControllers(analysis);
+  const distributors = buildTopDistributors(analysis);
+
+  // Footer: jualan melemah (yang sudah berhenti / kemungkinan distribusi selesai)
+  const stoppedDist = analysis.stoppedDist.slice(0, 6);
+  // Codes yang sudah dipromosikan ke section utama (jangan duplikasi di footer)
+  const promotedCodes = new Set(distributors.map((d) => d.entry.code));
+  const remainingDist = analysis.konsistenDist
+    .filter((e) => !promotedCodes.has(e.code))
+    .slice(0, 6);
 
   return (
     <div className="rounded-xl border border-border bg-card overflow-hidden">
-      {/* Header — gaya senada dengan TopBrokerCard */}
+      {/* Header */}
       <div className="flex items-center justify-between gap-3 px-4 py-2 border-b border-border bg-gradient-to-r from-amber-500/5 to-transparent">
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-amber-400">🏆</span>
           <h3 className="text-sm font-semibold text-amber-300 tracking-wide truncate">
-            Kandidat Terkuat yang Akumulasi {symbol}
+            Analisa Bandar {symbol} — Controller, Konfirmasi, Distributor
           </h3>
         </div>
         <span className="text-[11px] text-muted-foreground whitespace-nowrap">
@@ -374,37 +625,82 @@ export function BrokerConsistencyCard({
         </span>
       </div>
 
-      <div className="p-3 space-y-3">
-        {/* Candidates */}
-        {candidates.length === 0 ? (
-          <div className="text-xs text-muted-foreground italic px-1 py-2">
-            Belum ada kandidat akumulasi yang terdeteksi.
-          </div>
-        ) : (
-          <div className="flex flex-col gap-2">
-            {candidates.map((c) => <CandidateRow key={c.entry.code} c={c} />)}
-          </div>
+      <div className="p-3 space-y-4">
+        {/* LAPIS 1 + 2: Controller mingguan dengan konfirmasi harian */}
+        {controllers.length > 0 && (
+          <section className="space-y-2">
+            <SectionHeader
+              badge="Lapis 1 + 2"
+              title={`Controller Mingguan & Konfirmasi Hari Ini`}
+              subtitle="siapa yang in control + apa yang mereka lakukan harian"
+              tone="emerald"
+            />
+            <div className="flex flex-col gap-2">
+              {controllers.map((c) => <ControllerRow key={c.entry.code} c={c} />)}
+            </div>
+          </section>
         )}
 
-        {/* Distribusi ringkas */}
-        {(topDist.length > 0 || stoppedDist.length > 0) && (
+        {/* Kandidat Terkuat (leaderboard detail) */}
+        {candidates.length > 0 && (
+          <section className="space-y-2">
+            <SectionHeader
+              badge="Kandidat"
+              title={`Kandidat Terkuat yang Akumulasi ${symbol}`}
+              subtitle="pool lengkap broker yang lagi serap, dengan narasi per broker"
+              tone="amber"
+            />
+            <div className="flex flex-col gap-2">
+              {candidates.map((c) => <CandidateRow key={c.entry.code} c={c} />)}
+            </div>
+          </section>
+        )}
+
+        {/* Distributor Terbesar — highlight bahaya */}
+        {distributors.length > 0 && (
+          <section className="space-y-2">
+            <SectionHeader
+              badge="Bahaya"
+              title="Distributor Terbesar"
+              subtitle="kalau belum berhenti, akumulasi bisa terus diserap tanpa harga naik"
+              tone="rose"
+            />
+            <div className="flex flex-col gap-2">
+              {distributors.map((d) => <DistributorRow key={d.entry.code} d={d} />)}
+            </div>
+          </section>
+        )}
+
+        {/* Footer ringkas */}
+        {(remainingDist.length > 0 || stoppedDist.length > 0) && (
           <div className="pt-3 border-t border-border/60 space-y-1.5">
-            {topDist.length > 0 && (
-              <div className="text-[12px]">
-                <span className="font-bold text-rose-300 uppercase tracking-wider text-[10px]">🟥 Jualan konsisten:</span>{" "}
-                <span className="text-foreground/90 font-mono">
-                  {topDist.map((e) => `${e.code} ${fmtIDR(e.weeklyValue)}`).join(", ")}
+            {remainingDist.length > 0 && (
+              <div className="text-[12px] md:text-[13px]">
+                <span className="font-bold text-rose-300/80 uppercase tracking-wider text-[10px] md:text-[11px]">
+                  🟥 Distributor lain:
+                </span>{" "}
+                <span className="text-foreground/80 font-mono">
+                  {remainingDist.map((e) => `${e.code} ${fmtIDR(e.weeklyValue)}`).join(", ")}
                 </span>
               </div>
             )}
             {stoppedDist.length > 0 && (
-              <div className="text-[12px]">
-                <span className="font-bold text-amber-300 uppercase tracking-wider text-[10px]">📉 Jualan melemah:</span>{" "}
+              <div className="text-[12px] md:text-[13px]">
+                <span className="font-bold text-amber-300 uppercase tracking-wider text-[10px] md:text-[11px]">
+                  📉 Jualan melemah:
+                </span>{" "}
                 <span className="text-foreground/90 font-mono">
                   {stoppedDist.map((e) => `${e.code} ${fmtIDR(e.weeklyValue)}`).join(", ")}
                 </span>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Empty state */}
+        {controllers.length === 0 && candidates.length === 0 && distributors.length === 0 && (
+          <div className="text-xs text-muted-foreground italic px-1 py-2">
+            Belum ada pola controller / akumulasi / distributor yang terdeteksi.
           </div>
         )}
       </div>
