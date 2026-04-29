@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Calendar, Check, Copy, Hash, X } from "lucide-react";
+import { Calendar, Check, Copy, Database, Hash, Save, X } from "lucide-react";
 import { ResultTable } from "@/components/ResultTable";
 import { SummaryCard } from "@/components/SummaryCard";
 import { TopBrokerCard } from "@/components/TopBrokerCard";
 import { BrokerCompareCard } from "@/components/BrokerCompareCard";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { SavedListModal } from "@/components/SavedListModal";
+import { listSaved, saveItem, type SavedItem } from "@/lib/storage";
 import { mergeInputs, type MergedTable } from "@/lib/merger";
 import {
   parseBrokerActivity,
@@ -181,6 +183,10 @@ export function HomePage() {
   });
   const [submitted, setSubmitted] = useState<Record<SourceKey, string> | null>(null);
   const [showResult, setShowResult] = useState(false);
+  const [showSavedList, setShowSavedList] = useState(false);
+  const [savedCount, setSavedCount] = useState<number>(() =>
+    typeof window === "undefined" ? 0 : listSaved().length,
+  );
 
   // Defensif: kalau state lama (sebelum brokerPrev ditambahkan) di-rehydrate
   // oleh HMR, beberapa key bisa undefined. Pastikan selalu string.
@@ -242,6 +248,29 @@ export function HomePage() {
 
   const handleCloseResult = () => {
     setShowResult(false);
+  };
+
+  const handleSaveCurrent = (ket: string): boolean => {
+    if (!submitted) return false;
+    const filled = (Object.values(submitted) as string[]).filter(
+      (v) => v.trim().length > 0,
+    ).length;
+    saveItem({
+      symbol: symbol.trim() || "—",
+      ket: ket.trim(),
+      filledCount: filled,
+      data: { ...submitted },
+    });
+    setSavedCount(listSaved().length);
+    return true;
+  };
+
+  const handleViewSaved = (item: SavedItem) => {
+    setData({ ...item.data });
+    setSubmitted({ ...item.data });
+    setSymbol(item.symbol === "—" ? "" : item.symbol);
+    setShowSavedList(false);
+    setShowResult(true);
   };
 
   useEffect(() => {
@@ -453,6 +482,21 @@ export function HomePage() {
           >
             Reset
           </button>
+          <button
+            onClick={() => {
+              setSavedCount(listSaved().length);
+              setShowSavedList(true);
+            }}
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-md bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 ring-1 ring-emerald-500/30 text-sm font-semibold transition-colors"
+          >
+            <Database className="h-4 w-4" />
+            Lihat Data
+            {savedCount > 0 && (
+              <span className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-[11px] font-bold bg-emerald-500 text-emerald-950">
+                {savedCount}
+              </span>
+            )}
+          </button>
           <div className="ml-auto text-xs text-muted-foreground flex items-center gap-2">
             <Calendar className="h-3.5 w-3.5" />
             {filledCount} dari {SOURCES.length} sumber terisi
@@ -470,6 +514,14 @@ export function HomePage() {
           brokerComparison={brokerComparison}
           brokerConsistency={brokerConsistency}
           onClose={handleCloseResult}
+          onSave={handleSaveCurrent}
+        />
+      )}
+
+      {showSavedList && (
+        <SavedListModal
+          onClose={() => setShowSavedList(false)}
+          onView={handleViewSaved}
         />
       )}
     </div>
@@ -484,6 +536,7 @@ function ResultModal({
   brokerComparison,
   brokerConsistency,
   onClose,
+  onSave,
 }: {
   merged: MergedTable | null;
   symbol: string;
@@ -492,10 +545,24 @@ function ResultModal({
   brokerComparison: BrokerComparison | null;
   brokerConsistency: ConsistencyAnalysis | null;
   onClose: () => void;
+  onSave: (ket: string) => boolean;
 }) {
   const [tab, setTab] = useState<"rekomendasi" | "top-broker" | "bandingkan">(
     brokerComparison ? "bandingkan" : "rekomendasi",
   );
+  const [saveOpen, setSaveOpen] = useState(false);
+  const [saveKet, setSaveKet] = useState("");
+  const [savedAt, setSavedAt] = useState<number | null>(null);
+
+  const handleSubmitSave = () => {
+    const ok = onSave(saveKet);
+    if (ok) {
+      setSavedAt(Date.now());
+      setSaveOpen(false);
+      setSaveKet("");
+      window.setTimeout(() => setSavedAt(null), 2200);
+    }
+  };
 
   // Kalau tab yang dipilih tidak tersedia, jatuhkan ke rekomendasi.
   useEffect(() => {
@@ -530,14 +597,70 @@ function ResultModal({
               Data lengkap hasil penggabungan dari {filledCount} sumber
             </p>
           </div>
-          <button
-            onClick={onClose}
-            className="shrink-0 inline-flex items-center justify-center h-9 w-9 rounded-md border border-border bg-background/40 text-muted-foreground hover:text-foreground hover:border-border/80 transition-colors"
-            title="Tutup (Esc)"
-            aria-label="Tutup"
-          >
-            <X className="h-4 w-4" />
-          </button>
+          <div className="shrink-0 flex items-center gap-2 relative">
+            <button
+              onClick={() => setSaveOpen((v) => !v)}
+              className={`inline-flex items-center gap-1.5 px-3 h-9 rounded-md text-xs font-semibold transition-colors ${
+                savedAt
+                  ? "bg-emerald-500/20 text-emerald-300 ring-1 ring-emerald-500/40"
+                  : "bg-emerald-500 hover:bg-emerald-400 text-emerald-950"
+              }`}
+              title="Simpan data ini"
+            >
+              {savedAt ? (
+                <>
+                  <Check className="h-4 w-4" />
+                  Tersimpan
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4" />
+                  Simpan Data
+                </>
+              )}
+            </button>
+            {saveOpen && (
+              <div className="absolute right-0 top-full mt-2 z-20 w-72 rounded-lg border border-border bg-card shadow-2xl shadow-black/40 p-3 animate-in fade-in slide-in-from-top-1 duration-150">
+                <label className="block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
+                  Keterangan (opsional)
+                </label>
+                <input
+                  autoFocus
+                  type="text"
+                  value={saveKet}
+                  onChange={(e) => setSaveKet(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleSubmitSave();
+                    if (e.key === "Escape") setSaveOpen(false);
+                  }}
+                  placeholder="mis. Lapis 1 controller minggu ini"
+                  className="w-full bg-input border border-border rounded-md px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500/40"
+                />
+                <div className="mt-2 flex items-center justify-end gap-2">
+                  <button
+                    onClick={() => setSaveOpen(false)}
+                    className="px-3 py-1.5 text-xs font-medium rounded-md text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    onClick={handleSubmitSave}
+                    className="px-3 py-1.5 text-xs font-semibold rounded-md bg-emerald-500 hover:bg-emerald-400 text-emerald-950 transition-colors"
+                  >
+                    Simpan
+                  </button>
+                </div>
+              </div>
+            )}
+            <button
+              onClick={onClose}
+              className="inline-flex items-center justify-center h-9 w-9 rounded-md border border-border bg-background/40 text-muted-foreground hover:text-foreground hover:border-border/80 transition-colors"
+              title="Tutup (Esc)"
+              aria-label="Tutup"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
         </div>
 
         <div
