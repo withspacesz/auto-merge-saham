@@ -2,11 +2,15 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Calendar,
   Check,
+  ChevronDown,
   Cloud,
   CloudOff,
   Copy,
   Database,
   Hash,
+  Loader2,
+  LogOut,
+  RefreshCw,
   Save,
   X,
 } from "lucide-react";
@@ -18,7 +22,12 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { SavedListModal } from "@/components/SavedListModal";
 import { LoginScreen } from "@/components/LoginScreen";
 import { listSaved, saveItem, type SavedItem } from "@/lib/storage";
-import { autoSync, loadConfig, pullAndMerge } from "@/lib/cloud-sync";
+import {
+  autoSync,
+  clearConfig,
+  loadConfig,
+  pullAndMerge,
+} from "@/lib/cloud-sync";
 import { mergeInputs, type MergedTable } from "@/lib/merger";
 import {
   parseBrokerActivity,
@@ -198,6 +207,12 @@ export function HomePage() {
   const [showSavedList, setShowSavedList] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
   const [hasCloudSync, setHasCloudSync] = useState(() => !!loadConfig());
+  const [syncMenuOpen, setSyncMenuOpen] = useState(false);
+  const [syncBusy, setSyncBusy] = useState(false);
+  const [lastSyncAt, setLastSyncAt] = useState<string | null>(
+    () => loadConfig()?.lastSyncAt ?? null,
+  );
+  const syncMenuRef = useRef<HTMLDivElement | null>(null);
   const [savedCount, setSavedCount] = useState<number>(() =>
     typeof window === "undefined" ? 0 : listSaved().length,
   );
@@ -316,6 +331,7 @@ export function HomePage() {
       try {
         const merged = await pullAndMerge();
         if (!cancelled && merged) setSavedCount(merged.length);
+        if (!cancelled) setLastSyncAt(loadConfig()?.lastSyncAt ?? null);
       } catch (e) {
         console.warn("[cloud-sync] pull on mount gagal:", e);
       }
@@ -325,10 +341,53 @@ export function HomePage() {
     };
   }, []);
 
+  // Tutup dropdown sync kalau klik di luar
+  useEffect(() => {
+    if (!syncMenuOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (
+        syncMenuRef.current &&
+        !syncMenuRef.current.contains(e.target as Node)
+      ) {
+        setSyncMenuOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSyncMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [syncMenuOpen]);
+
   const handleConnected = () => {
     setHasCloudSync(true);
     setShowLogin(false);
     setSavedCount(listSaved().length);
+    setLastSyncAt(loadConfig()?.lastSyncAt ?? null);
+  };
+
+  const handlePullNow = async () => {
+    setSyncBusy(true);
+    try {
+      const merged = await pullAndMerge();
+      if (merged) setSavedCount(merged.length);
+      setLastSyncAt(loadConfig()?.lastSyncAt ?? null);
+    } catch (e) {
+      console.warn("[cloud-sync] manual pull gagal:", e);
+    } finally {
+      setSyncBusy(false);
+    }
+  };
+
+  const handleLogout = () => {
+    clearConfig();
+    setHasCloudSync(false);
+    setSyncMenuOpen(false);
+    setLastSyncAt(null);
   };
 
   const { merged } = useMemo(() => {
@@ -568,31 +627,97 @@ export function HomePage() {
               </span>
             )}
           </button>
-          <button
-            onClick={() => setShowLogin(true)}
-            title={
-              hasCloudSync
-                ? "Tersinkron ke GitHub Gist"
-                : "Login GitHub untuk sync data"
-            }
-            className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-md text-sm font-semibold transition-colors ${
-              hasCloudSync
-                ? "bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 ring-1 ring-emerald-500/30"
-                : "bg-muted hover:bg-muted/70 text-foreground"
-            }`}
-          >
-            {hasCloudSync ? (
-              <>
-                <Cloud className="h-4 w-4" />
-                Tersinkron
-              </>
-            ) : (
-              <>
-                <CloudOff className="h-4 w-4" />
-                Login GitHub
-              </>
+          <div className="relative" ref={syncMenuRef}>
+            <button
+              onClick={() => {
+                if (hasCloudSync) {
+                  setSyncMenuOpen((v) => !v);
+                } else {
+                  setShowLogin(true);
+                }
+              }}
+              title={
+                hasCloudSync
+                  ? "Tersinkron ke GitHub Gist"
+                  : "Login GitHub untuk sync data"
+              }
+              className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-md text-sm font-semibold transition-colors ${
+                hasCloudSync
+                  ? "bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 ring-1 ring-emerald-500/30"
+                  : "bg-muted hover:bg-muted/70 text-foreground"
+              }`}
+            >
+              {hasCloudSync ? (
+                <>
+                  <Cloud className="h-4 w-4" />
+                  Tersinkron
+                  <ChevronDown
+                    className={`h-3.5 w-3.5 transition-transform ${
+                      syncMenuOpen ? "rotate-180" : ""
+                    }`}
+                  />
+                </>
+              ) : (
+                <>
+                  <CloudOff className="h-4 w-4" />
+                  Login GitHub
+                </>
+              )}
+            </button>
+
+            {hasCloudSync && syncMenuOpen && (
+              <div className="absolute right-0 mt-2 w-72 z-50 rounded-lg border border-border bg-card shadow-2xl shadow-emerald-500/10 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+                <div className="px-4 py-3 border-b border-border bg-emerald-500/5">
+                  <div className="flex items-center gap-2 text-emerald-300 text-sm font-semibold">
+                    <Cloud className="h-4 w-4" />
+                    Tersinkron ke GitHub Gist
+                  </div>
+                  <div className="mt-1 text-[11px] text-muted-foreground">
+                    {lastSyncAt ? (
+                      <>
+                        Terakhir sinkron:{" "}
+                        <span className="font-mono text-foreground/80">
+                          {new Date(lastSyncAt).toLocaleString("id-ID", {
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </span>
+                      </>
+                    ) : (
+                      "Belum pernah sinkron"
+                    )}
+                  </div>
+                </div>
+                <div className="p-1.5">
+                  <button
+                    onClick={handlePullNow}
+                    disabled={syncBusy}
+                    className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium text-foreground hover:bg-muted disabled:opacity-50 transition-colors"
+                  >
+                    {syncBusy ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-4 w-4" />
+                    )}
+                    Tarik dari cloud
+                  </button>
+                  <button
+                    onClick={handleLogout}
+                    className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium text-red-300 hover:bg-red-500/10 transition-colors"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    Logout
+                  </button>
+                </div>
+                <div className="px-4 py-2 border-t border-border bg-muted/30 text-[10.5px] text-muted-foreground">
+                  Logout cuma memutus sinkron — data tersimpan di akun GitHub kamu tetap aman.
+                </div>
+              </div>
             )}
-          </button>
+          </div>
           <div className="ml-auto text-xs text-muted-foreground flex items-center gap-2">
             <Calendar className="h-3.5 w-3.5" />
             {filledCount} dari {SOURCES.length} sumber terisi
