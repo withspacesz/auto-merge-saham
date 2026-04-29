@@ -7,6 +7,7 @@ import { BrokerCompareCard } from "@/components/BrokerCompareCard";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { SavedListModal } from "@/components/SavedListModal";
 import { listSaved, saveItem, type SavedItem } from "@/lib/storage";
+import { autoSync, loadConfig, pullAndMerge } from "@/lib/cloud-sync";
 import { mergeInputs, type MergedTable } from "@/lib/merger";
 import {
   parseBrokerActivity,
@@ -232,6 +233,10 @@ export function HomePage() {
       /Data\s+saham\s+([A-Z]{2,6})\b/i,
       /Saham\s+([A-Z]{2,6})\s*\(/i,
       /\bSaham\s+([A-Z]{2,6})\b/i,
+      // Broker Summary <KODE> Regular Board
+      /Broker\s+Summary\s+([A-Z]{2,6})\b/i,
+      // Rekap Clean Money Saham <KODE>
+      /Clean\s+Money\s+Saham\s+([A-Z]{2,6})\b/i,
     ];
     for (const re of patterns) {
       const m = text.match(re);
@@ -262,6 +267,8 @@ export function HomePage() {
       data: { ...submitted },
     });
     setSavedCount(listSaved().length);
+    // Sinkronkan ke GitHub Gist (kalau sudah disetel) — fire & forget.
+    void autoSync();
     return true;
   };
 
@@ -285,6 +292,23 @@ export function HomePage() {
       document.body.style.overflow = "";
     };
   }, [showResult]);
+
+  // Saat halaman dimuat, kalau cloud sync sudah disetel, tarik & merge dari Gist.
+  useEffect(() => {
+    if (!loadConfig()) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const merged = await pullAndMerge();
+        if (!cancelled && merged) setSavedCount(merged.length);
+      } catch (e) {
+        console.warn("[cloud-sync] pull on mount gagal:", e);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const { merged } = useMemo(() => {
     if (!submitted) return { merged: null };
@@ -411,7 +435,7 @@ export function HomePage() {
               <CommandRow
                 key={s.key}
                 tag={s.tag}
-                command={formatCommand(s.cmdBase, symbol, mode, candleCount, from, to)}
+                command={formatCommand(s.key, s.cmdBase, symbol, mode, candleCount, from, to)}
                 filled={safeData[s.key].trim().length > 0}
                 active={active === s.key}
                 onClick={() => setActive(s.key)}
@@ -591,10 +615,10 @@ function ResultModal({
         <div className="shrink-0 flex items-center justify-between gap-4 px-5 md:px-6 py-3 border-b border-border bg-card/95 backdrop-blur z-10">
           <div className="min-w-0">
             <h2 className="text-base md:text-lg font-bold text-emerald-400 truncate">
-              Hasil Gabungan {symbol ? `— ${symbol}` : ""}
+              Hasil Analisa {symbol ? `— ${symbol}` : ""}
             </h2>
             <p className="text-[11px] text-muted-foreground">
-              Data lengkap hasil penggabungan dari {filledCount} sumber
+              Data lengkap hasil analisa dari {filledCount} sumber
             </p>
           </div>
           <div className="shrink-0 flex items-center gap-2 relative">
@@ -758,7 +782,14 @@ function TabButton({
   );
 }
 
+function isoToDdMmYyyy(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!m) return iso;
+  return `${m[3]}-${m[2]}-${m[1]}`;
+}
+
 function formatCommand(
+  key: SourceKey,
   cmdBase: string,
   symbol: string,
   mode: Mode,
@@ -770,6 +801,12 @@ function formatCommand(
   if (mode === "candle") {
     const n = candleCount && Number(candleCount) > 0 ? candleCount : "N";
     return `${cmdBase} ${sym} ${n}`;
+  }
+  // /broksum pakai format khusus: date >= DD-MM-YYYY date <= DD-MM-YYYY
+  if (key === "broker" || key === "brokerPrev") {
+    const fromDmy = from ? isoToDdMmYyyy(from) : "DD-MM-YYYY";
+    const toDmy = to ? isoToDdMmYyyy(to) : "DD-MM-YYYY";
+    return `${cmdBase} ${sym} date >= ${fromDmy} date <= ${toDmy}`;
   }
   const fromCompact = from ? from.replace(/-/g, "") : "YYYYMMDD";
   const toCompact = to ? to.replace(/-/g, "") : "YYYYMMDD";

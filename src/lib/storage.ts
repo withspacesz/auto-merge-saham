@@ -67,6 +67,11 @@ export function deleteSaved(id: string): SavedItem[] {
   return updated;
 }
 
+export function setAll(items: SavedItem[]): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+}
+
 export function formatSavedDate(iso: string): string {
   try {
     const d = new Date(iso);

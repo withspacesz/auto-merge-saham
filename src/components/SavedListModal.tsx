@@ -1,11 +1,28 @@
 import { useEffect, useState } from "react";
-import { Eye, Trash2, X, Inbox } from "lucide-react";
+import {
+  Cloud,
+  CloudOff,
+  Eye,
+  Inbox,
+  Loader2,
+  RefreshCw,
+  Trash2,
+  X,
+} from "lucide-react";
 import {
   deleteSaved,
   formatSavedDate,
   listSaved,
   type SavedItem,
 } from "@/lib/storage";
+import {
+  autoSync,
+  clearConfig,
+  createGist,
+  loadConfig,
+  pullAndMerge,
+  saveConfig,
+} from "@/lib/cloud-sync";
 
 type Props = {
   onClose: () => void;
@@ -15,6 +32,19 @@ type Props = {
 export function SavedListModal({ onClose, onView }: Props) {
   const [items, setItems] = useState<SavedItem[]>(() => listSaved());
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  // Sync state
+  const [config, setConfig] = useState(() => loadConfig());
+  const [showSyncSetup, setShowSyncSetup] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState<{
+    text: string;
+    kind: "ok" | "err";
+  } | null>(null);
+
+  // Form state for sync setup
+  const [tokenInput, setTokenInput] = useState("");
+  const [gistInput, setGistInput] = useState("");
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -32,6 +62,65 @@ export function SavedListModal({ onClose, onView }: Props) {
     const next = deleteSaved(id);
     setItems(next);
     setConfirmDeleteId(null);
+    void autoSync();
+  };
+
+  const refresh = () => setItems(listSaved());
+
+  const flashMsg = (text: string, kind: "ok" | "err") => {
+    setSyncMsg({ text, kind });
+    window.setTimeout(() => setSyncMsg(null), 3500);
+  };
+
+  const handleConnectSync = async () => {
+    const token = tokenInput.trim();
+    if (!token) {
+      flashMsg("Token tidak boleh kosong.", "err");
+      return;
+    }
+    setSyncing(true);
+    try {
+      let gistId = gistInput.trim();
+      if (!gistId) {
+        // Buat gist baru dari data lokal saat ini
+        gistId = await createGist(token, listSaved());
+      }
+      saveConfig({ token, gistId, lastSyncAt: new Date().toISOString() });
+      setConfig(loadConfig());
+      // Setelah konek, langsung tarik & merge
+      await pullAndMerge();
+      refresh();
+      setShowSyncSetup(false);
+      setTokenInput("");
+      setGistInput("");
+      flashMsg("Berhasil tersambung & sinkron.", "ok");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      flashMsg(`Gagal: ${msg}`, "err");
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const handlePull = async () => {
+    setSyncing(true);
+    try {
+      await pullAndMerge();
+      refresh();
+      setConfig(loadConfig());
+      flashMsg("Tarik dari cloud berhasil.", "ok");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      flashMsg(`Gagal tarik: ${msg}`, "err");
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const handleDisconnect = () => {
+    clearConfig();
+    setConfig(null);
+    flashMsg("Cloud sync diputuskan. Data lokal tetap.", "ok");
   };
 
   return (
@@ -46,15 +135,23 @@ export function SavedListModal({ onClose, onView }: Props) {
       />
 
       <div className="relative w-full max-w-3xl max-h-[88vh] flex flex-col rounded-xl border border-border bg-card shadow-2xl shadow-emerald-500/10 overflow-hidden animate-in zoom-in-95 fade-in duration-200">
-        <div className="shrink-0 flex items-center justify-between gap-4 px-5 py-3 border-b border-border bg-card/95 backdrop-blur z-10">
+        <div className="shrink-0 flex items-start justify-between gap-4 px-5 py-3 border-b border-border bg-card/95 backdrop-blur z-10">
           <div className="min-w-0">
             <h2 className="text-base md:text-lg font-bold text-emerald-400">
               Data Tersimpan
             </h2>
             <p className="text-[11px] text-muted-foreground">
               {items.length === 0
-                ? "Belum ada data. Simpan dari hasil gabungan untuk melihatnya di sini."
-                : `${items.length} data tersimpan di perangkat ini`}
+                ? "Belum ada data. Simpan dari hasil analisa untuk melihatnya di sini."
+                : `${items.length} data tersimpan`}
+              {config?.lastSyncAt && (
+                <>
+                  {" · sinkron terakhir "}
+                  <span className="text-emerald-300/80 font-mono">
+                    {formatSavedDate(config.lastSyncAt)}
+                  </span>
+                </>
+              )}
             </p>
           </div>
           <button
@@ -67,15 +164,132 @@ export function SavedListModal({ onClose, onView }: Props) {
           </button>
         </div>
 
+        {/* Sync toolbar */}
+        <div className="shrink-0 px-5 py-2.5 border-b border-border bg-muted/20 flex items-center gap-2 flex-wrap">
+          {config ? (
+            <>
+              <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-semibold bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/30">
+                <Cloud className="h-3.5 w-3.5" />
+                Tersinkron ke GitHub Gist
+              </span>
+              <button
+                onClick={handlePull}
+                disabled={syncing}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold border border-border bg-background/40 text-foreground hover:border-border/80 disabled:opacity-50 transition-colors"
+              >
+                {syncing ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-3.5 w-3.5" />
+                )}
+                Tarik dari cloud
+              </button>
+              <button
+                onClick={handleDisconnect}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium text-muted-foreground hover:text-red-300 transition-colors"
+                title="Putuskan sambungan (data lokal tetap)"
+              >
+                <CloudOff className="h-3.5 w-3.5" />
+                Putuskan
+              </button>
+            </>
+          ) : (
+            <>
+              <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-muted text-muted-foreground">
+                <CloudOff className="h-3.5 w-3.5" />
+                Belum tersinkron
+              </span>
+              <button
+                onClick={() => setShowSyncSetup((v) => !v)}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-emerald-500 hover:bg-emerald-400 text-emerald-950 transition-colors"
+              >
+                <Cloud className="h-3.5 w-3.5" />
+                Sambungkan ke GitHub
+              </button>
+            </>
+          )}
+          {syncMsg && (
+            <span
+              className={`ml-auto text-[11px] font-medium ${
+                syncMsg.kind === "ok" ? "text-emerald-300" : "text-red-300"
+              }`}
+            >
+              {syncMsg.text}
+            </span>
+          )}
+        </div>
+
+        {/* Sync setup form */}
+        {showSyncSetup && !config && (
+          <div className="shrink-0 px-5 py-3 border-b border-border bg-emerald-500/5 space-y-2">
+            <div className="text-xs text-muted-foreground leading-relaxed">
+              Buat <span className="font-semibold text-foreground">Personal Access Token</span> di{" "}
+              <a
+                href="https://github.com/settings/tokens?type=beta"
+                target="_blank"
+                rel="noreferrer"
+                className="text-emerald-300 hover:text-emerald-200 underline underline-offset-2"
+              >
+                github.com/settings/tokens
+              </a>{" "}
+              dengan scope <code className="px-1 py-0.5 rounded bg-muted text-foreground font-mono text-[10px]">gist</code>.
+              Token disimpan di browser kamu, tidak dikirim ke siapapun selain GitHub.
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-[1fr_220px] gap-2">
+              <input
+                type="password"
+                value={tokenInput}
+                onChange={(e) => setTokenInput(e.target.value)}
+                placeholder="ghp_xxxx... (Personal Access Token)"
+                className="bg-input border border-border rounded-md px-3 py-1.5 text-sm font-mono outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500/40"
+              />
+              <input
+                type="text"
+                value={gistInput}
+                onChange={(e) => setGistInput(e.target.value)}
+                placeholder="ID Gist (opsional)"
+                className="bg-input border border-border rounded-md px-3 py-1.5 text-sm font-mono outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500/40"
+              />
+            </div>
+            <div className="text-[11px] text-muted-foreground">
+              Kosongkan ID Gist untuk membuat gist privat baru otomatis. Isi kalau sudah punya gist (untuk sambung ke perangkat lain).
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleConnectSync}
+                disabled={syncing}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold bg-emerald-500 hover:bg-emerald-400 text-emerald-950 disabled:opacity-50 transition-colors"
+              >
+                {syncing ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Cloud className="h-3.5 w-3.5" />
+                )}
+                Sambungkan
+              </button>
+              <button
+                onClick={() => {
+                  setShowSyncSetup(false);
+                  setTokenInput("");
+                  setGistInput("");
+                }}
+                className="px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Batal
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="flex-1 min-h-0 overflow-y-auto">
           {items.length === 0 ? (
             <div className="flex flex-col items-center justify-center text-center py-16 px-6 text-muted-foreground">
               <Inbox className="h-10 w-10 mb-3 opacity-60" />
-              <p className="text-sm">
-                Belum ada data tersimpan.
-              </p>
+              <p className="text-sm">Belum ada data tersimpan.</p>
               <p className="text-xs mt-1 opacity-80">
-                Buka hasil gabungan, lalu klik <span className="text-emerald-400 font-medium">Simpan Data</span> untuk menyimpan.
+                Buka hasil analisa, lalu klik{" "}
+                <span className="text-emerald-400 font-medium">Simpan Data</span>{" "}
+                untuk menyimpan.
               </p>
             </div>
           ) : (
