@@ -186,20 +186,18 @@ function formatMergedTable(merged: MergedTable, symbol: string): string {
   );
   lines.push("");
 
-  // Hanya kolom inti — drop yang noise (Value, Ket NBSA biasanya Netral).
-  const PRIORITY = ["Tanggal", "Price", "NBSA", "MF +/-", "Ket MF"];
+  // Kolom inti sesuai permintaan user — tampilkan lengkap.
+  const PRIORITY = ["Tanggal", "Price", "NBSA", "MF +/-", "Ket MF", "Ket NBSA"];
   const headers = PRIORITY.filter((h) => merged.headers.includes(h));
   const usedHeaders =
-    headers.length > 0 ? headers : merged.headers.slice(0, 5);
+    headers.length > 0 ? headers : merged.headers.slice(0, 6);
 
   // Pisahkan baris total dari baris harian
   const dataRows = merged.rows.filter((r) => !r.__isTotal);
   const totalRow = merged.rows.find((r) => r.__isTotal);
 
-  // Batasi maksimal 6 baris terbaru biar tidak overflow di mobile.
-  const MAX_ROWS = 6;
-  const shown = dataRows.slice(0, MAX_ROWS);
-  const omitted = dataRows.length - shown.length;
+  // Tampilkan SEMUA baris (tidak dipotong) sesuai permintaan user.
+  const shown = dataRows;
 
   // Singkat tanggal jadi DD-MM (drop tahun) untuk hemat lebar.
   const shortDate = (s: string) => {
@@ -225,7 +223,7 @@ function formatMergedTable(merged: MergedTable, symbol: string): string {
       .replace(/[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}\u{FE0F}\u{203C}]/gu, "")
       .trim();
     if (h === "Tanggal") v = shortDate(v);
-    if (h === "Ket MF") v = KET_SHORT[v] ?? v;
+    if (h === "Ket MF" || h === "Ket NBSA") v = KET_SHORT[v] ?? v;
     return v || "—";
   };
 
@@ -261,9 +259,6 @@ function formatMergedTable(merged: MergedTable, symbol: string): string {
     lines.push(escapeHtml(`Σ ${cells}`));
   }
   lines.push("</pre>");
-  if (omitted > 0) {
-    lines.push(`<i>+${omitted} baris lain disembunyikan</i>`);
-  }
   return lines.join("\n");
 }
 
@@ -296,21 +291,6 @@ function formatBrokerSummary(
     ? a.narrative.detail.slice(0, 177).trimEnd() + "…"
     : a.narrative.detail;
   lines.push(escapeHtml(detail));
-  lines.push("");
-
-  // Aliran dana — 1 baris kompak
-  lines.push(
-    `💰 B:<code>${escapeHtml(fmtIDRShort(a.totalBuy))}</code> S:<code>${escapeHtml(fmtIDRShort(a.totalSell))}</code> Net:<code>${escapeHtml(fmtIDRShort(a.netBSA))}</code>`,
-  );
-  // Komposisi — 1 baris
-  const compParts = [
-    `Asing <code>${escapeHtml(fmtIDRShort(a.netAsing))}</code>`,
-    `Lokal <code>${escapeHtml(fmtIDRShort(a.netLokal))}</code>`,
-  ];
-  if (a.netUnknown !== 0) {
-    compParts.push(`Unk <code>${escapeHtml(fmtIDRShort(a.netUnknown))}</code>`);
-  }
-  lines.push(`🌐 ${compParts.join(" | ")}`);
 
   return lines.join("\n").trimEnd();
 }
@@ -357,9 +337,10 @@ function formatBrokerConsistency(
     unique.slice(0, limit).forEach((e, i) => {
       const w = e.weeklyValue ? fmtIDRShort(e.weeklyValue) : "—";
       const d = e.dailyValue ? fmtIDRShort(e.dailyValue) : "—";
-      // Format jelas: "Mingguan" vs "Hari ini" supaya tidak ambigu
+      // Format jelas: "Mingguan" vs "Hari ini" supaya tidak ambigu.
+      // Nama broker tampil LENGKAP (tidak dipotong) sesuai permintaan user.
       lines.push(
-        `${i + 1}. <b>${escapeHtml(e.code)}</b> ${escapeHtml(shortName(e.info.name))}`,
+        `${i + 1}. <b>${escapeHtml(e.code)}</b> ${escapeHtml(e.info.name)}`,
       );
       lines.push(
         `   <code>Mingguan: ${escapeHtml(w)} | Hari ini: ${escapeHtml(d)}</code>`,
