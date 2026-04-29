@@ -268,9 +268,31 @@ function toneEmoji(t: RecTone): string {
   return t === "green" ? "🟢" : t === "red" ? "🔴" : t === "amber" ? "🟡" : "⚪";
 }
 
+// Bungkus teks panjang ke beberapa baris dengan lebar maksimum tertentu,
+// dengan indent kontinuasi supaya rapi di dalam <pre>.
+function wrapText(text: string, width: number, indent = ""): string[] {
+  const words = String(text ?? "").replace(/\s+/g, " ").trim().split(" ");
+  const out: string[] = [];
+  let line = "";
+  for (const w of words) {
+    if (!line) {
+      line = w;
+      continue;
+    }
+    if ((line + " " + w).length > width) {
+      out.push(line);
+      line = indent + w;
+    } else {
+      line += " " + w;
+    }
+  }
+  if (line) out.push(line);
+  return out.length ? out : [""];
+}
+
 // Ringkasan & Analisa Bandar — mirror konten kartu di UI (RecommendationBanner
-// + KONFIRMASI BROKER). Output di Telegram mengikuti app persis: rekomendasi
-// (label + score), headline, detail, chip alasan, dan konfirmasi broker.
+// + KONFIRMASI BROKER). Output dibungkus <pre> agar tampil sebagai kotak
+// monospace yang bisa di-copy di Telegram (mirip tampilan HASIL GABUNGAN).
 function formatBrokerSummary(
   merged: MergedTable | null,
   brokerAnalysis: BrokerAnalysis | null,
@@ -290,37 +312,64 @@ function formatBrokerSummary(
   const { recommendation, score, reasonsTopFour, periodLabel, days, brokerInsight } = result;
   const scoreSign = score > 0 ? "+" : "";
 
-  lines.push(
-    `<i>📅 ${escapeHtml(periodLabel)} • ${days.length} hari terakhir</i>`,
-  );
-  lines.push("");
+  // Lebar konten di dalam kotak <pre>. Cukup nyaman dibaca di mobile Telegram.
+  const WIDTH = 46;
+  const sep = "─".repeat(WIDTH);
+  const labelPad = 11; // lebar kolom label "Periode    :"
 
-  // Banner rekomendasi
-  lines.push(
-    `${toneEmoji(recommendation.tone)} <b>REKOMENDASI: ${escapeHtml(recommendation.label)}</b>  <i>(skor ${scoreSign}${score.toFixed(1)})</i>`,
-  );
-  lines.push(`🎯 <b>${escapeHtml(recommendation.headline)}</b>`);
-  lines.push(escapeHtml(recommendation.detail));
+  // Susun baris label : value dengan word-wrap untuk value panjang.
+  const labelLine = (label: string, value: string): string[] => {
+    const head = pad(label, labelPad) + ": ";
+    const indent = " ".repeat(head.length);
+    const wrapped = wrapText(value, WIDTH - head.length, "");
+    const out: string[] = [];
+    out.push(head + wrapped[0]);
+    for (let i = 1; i < wrapped.length; i++) out.push(indent + wrapped[i]);
+    return out;
+  };
 
-  // Chip alasan (gabungkan jadi satu baris pakai bullet).
+  const box: string[] = [];
+
+  // Bagian periode
+  box.push(...labelLine("Periode", periodLabel));
+  box.push(...labelLine("Hari", `${days.length} hari terakhir`));
+  box.push(sep);
+
+  // Bagian rekomendasi
+  box.push(
+    ...labelLine(
+      "Rekomendasi",
+      `${toneEmoji(recommendation.tone)} ${recommendation.label}  (skor ${scoreSign}${score.toFixed(1)})`,
+    ),
+  );
+  box.push(...labelLine("Headline", `🎯 ${recommendation.headline}`));
+  box.push(...labelLine("Detail", recommendation.detail));
+
+  // Bagian alasan (chips → list di dalam kotak)
   if (reasonsTopFour.length > 0) {
-    const chips = reasonsTopFour
-      .map((r) => `${toneEmoji(r.tone)} ${escapeHtml(r.text)}`)
-      .join("  •  ");
-    lines.push("");
-    lines.push(chips);
+    box.push(sep);
+    box.push("Alasan:");
+    for (const r of reasonsTopFour) {
+      const wrapped = wrapText(`${toneEmoji(r.tone)} ${r.text}`, WIDTH - 2, "   ");
+      box.push(" • " + wrapped[0]);
+      for (let i = 1; i < wrapped.length; i++) box.push("   " + wrapped[i]);
+    }
   }
 
-  // KONFIRMASI BROKER · tanggal
+  // Bagian konfirmasi broker
   if (brokerInsight) {
-    lines.push("");
-    lines.push(
-      `🏢 <b>KONFIRMASI BROKER</b> · <i>${escapeHtml(brokerInsight.date || "—")}</i>`,
-    );
-    lines.push(
-      `<b>${escapeHtml(brokerInsight.verdictPrefix)}</b> ${escapeHtml(brokerInsight.insight)}`,
-    );
+    box.push(sep);
+    box.push(`🏢 KONFIRMASI BROKER · ${brokerInsight.date || "—"}`);
+    box.push("");
+    const verdict = `${brokerInsight.verdictPrefix} ${brokerInsight.insight}`.trim();
+    const wrapped = wrapText(verdict, WIDTH);
+    for (const w of wrapped) box.push(w);
   }
+
+  // Bungkus dalam <pre> agar muncul sebagai kotak copyable di Telegram.
+  lines.push("<pre>");
+  for (const b of box) lines.push(escapeHtml(b));
+  lines.push("</pre>");
 
   return lines.join("\n").trimEnd();
 }
