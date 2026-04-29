@@ -152,6 +152,23 @@ function fmtIDR(n: number): string {
   return `${sign}${abs.toFixed(0)}`;
 }
 
+// Versi pendek (tanpa desimal) untuk daftar broker biar tidak makan banyak baris.
+function fmtIDRShort(n: number): string {
+  const abs = Math.abs(n);
+  const sign = n < 0 ? "-" : n > 0 ? "+" : "";
+  if (abs >= 1e9) return `${sign}${(abs / 1e9).toFixed(1)}M`;
+  if (abs >= 1e6) return `${sign}${Math.round(abs / 1e6)}Jt`;
+  if (abs >= 1e3) return `${sign}${Math.round(abs / 1e3)}rb`;
+  return `${sign}${abs.toFixed(0)}`;
+}
+
+// Singkat nama broker biar baris tidak terlalu panjang.
+function shortName(name: string, max = 22): string {
+  const n = (name || "").replace(/\s+/g, " ").trim();
+  if (n.length <= max) return n;
+  return n.slice(0, max - 1).trimEnd() + "…";
+}
+
 function pad(s: string, len: number, align: "l" | "r" = "l"): string {
   const str = String(s ?? "");
   if (str.length >= len) return str.slice(0, len);
@@ -159,143 +176,159 @@ function pad(s: string, len: number, align: "l" | "r" = "l"): string {
   return align === "r" ? space + str : str + space;
 }
 
-// Render tabel hasil gabungan jadi monospace text yang muat di Telegram.
+// Render tabel hasil gabungan jadi monospace text yang muat di Telegram (versi ringkas).
 function formatMergedTable(merged: MergedTable, symbol: string): string {
   const lines: string[] = [];
   const sym = symbol.trim() || "—";
   lines.push(`<b>📊 HASIL GABUNGAN — ${escapeHtml(sym)}</b>`);
   lines.push(
-    `<i>${merged.sourceCount} sumber digabung • ${merged.matchedDates} tanggal cocok</i>`,
+    `<i>${merged.sourceCount} sumber • ${merged.matchedDates} tgl cocok</i>`,
   );
   lines.push("");
 
-  // Pilih kolom inti supaya muat di chat mobile.
-  const PRIORITY = [
-    "Tanggal",
-    "Price",
-    "Gain",
-    "NBSA",
-    "MF +/-",
-    "Value",
-    "Ket NBSA",
-    "Ket MF",
-    "Ket RCM",
-  ];
+  // Hanya kolom inti — drop yang noise (Value, Ket NBSA biasanya Netral).
+  const PRIORITY = ["Tanggal", "Price", "NBSA", "MF +/-", "Ket MF"];
   const headers = PRIORITY.filter((h) => merged.headers.includes(h));
-  // Kalau header inti tidak ada, fallback ke 5 kolom pertama
   const usedHeaders =
     headers.length > 0 ? headers : merged.headers.slice(0, 5);
+
+  // Pisahkan baris total dari baris harian
+  const dataRows = merged.rows.filter((r) => !r.__isTotal);
+  const totalRow = merged.rows.find((r) => r.__isTotal);
+
+  // Batasi maksimal 6 baris terbaru biar tidak overflow di mobile.
+  const MAX_ROWS = 6;
+  const shown = dataRows.slice(0, MAX_ROWS);
+  const omitted = dataRows.length - shown.length;
+
+  // Singkat tanggal jadi DD-MM (drop tahun) untuk hemat lebar.
+  const shortDate = (s: string) => {
+    const m = String(s ?? "").match(/^(\d{2})-(\d{2})-\d{4}$/);
+    return m ? `${m[1]}-${m[2]}` : String(s ?? "");
+  };
+
+  // Bersihkan emoji & singkat keterangan supaya tabel ringkas.
+  const KET_SHORT: Record<string, string> = {
+    "Massive Dist": "Mass.Dist",
+    "Big Dist": "Big Dist",
+    "Big Dist‼️": "Big Dist",
+    "Normal Dist": "Norm.Dist",
+    "Small Dist": "Sm.Dist",
+    "Massive Accum": "Mass.Acc",
+    "Big Accum": "Big Acc",
+    "Normal Accum": "Norm.Acc",
+    "Small Accum": "Sm.Acc",
+    Netral: "Netral",
+  };
+  const cleanCell = (h: string, raw: string) => {
+    let v = String(raw ?? "")
+      .replace(/[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}\u{FE0F}\u{203C}]/gu, "")
+      .trim();
+    if (h === "Tanggal") v = shortDate(v);
+    if (h === "Ket MF") v = KET_SHORT[v] ?? v;
+    return v || "—";
+  };
 
   // Hitung lebar kolom
   const widths: Record<string, number> = {};
   for (const h of usedHeaders) {
     let w = h.length;
-    for (const r of merged.rows) {
-      const v = String(r[h] ?? "");
+    for (const r of [...shown, ...(totalRow ? [totalRow] : [])]) {
+      const v = cleanCell(h, String(r[h] ?? ""));
       if (v.length > w) w = v.length;
     }
-    widths[h] = Math.min(w, 14); // batas 14 char per kolom
+    widths[h] = Math.min(w, 11);
   }
 
-  const headerLine = usedHeaders
-    .map((h) => pad(h, widths[h]))
-    .join(" │ ");
-  const sepLine = usedHeaders
-    .map((h) => "─".repeat(widths[h]))
-    .join("─┼─");
+  const headerLine = usedHeaders.map((h) => pad(h, widths[h])).join(" │ ");
+  const sepLine = usedHeaders.map((h) => "─".repeat(widths[h])).join("─┼─");
 
   lines.push("<pre>");
   lines.push(escapeHtml(headerLine));
   lines.push(escapeHtml(sepLine));
-  for (const row of merged.rows) {
-    const isTotal = !!row.__isTotal;
+  for (const row of shown) {
     const cells = usedHeaders
-      .map((h) => {
-        const raw = String(row[h] ?? "");
-        // Buang emoji panjang biar rapi
-        const cleaned = raw.replace(/[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}]/gu, "").trim();
-        return pad(cleaned || "—", widths[h]);
-      })
+      .map((h) => pad(cleanCell(h, String(row[h] ?? "")), widths[h]))
       .join(" │ ");
-    lines.push(escapeHtml(isTotal ? `Σ ${cells}` : cells));
+    lines.push(escapeHtml(cells));
+  }
+  if (totalRow) {
+    const cells = usedHeaders
+      .map((h) => pad(cleanCell(h, String(totalRow[h] ?? "")), widths[h]))
+      .join(" │ ");
+    lines.push(escapeHtml(`Σ ${cells}`));
   }
   lines.push("</pre>");
+  if (omitted > 0) {
+    lines.push(`<i>+${omitted} baris lain disembunyikan</i>`);
+  }
   return lines.join("\n");
 }
 
-// Ringkasan & analisa bandar (versi singkat untuk Telegram).
+// Ringkasan & analisa bandar (versi ringkas untuk Telegram).
 function formatBrokerSummary(
   brokerAnalysis: BrokerAnalysis | null,
   symbol: string,
 ): string {
   const lines: string[] = [];
   const sym = symbol.trim() || "—";
-  lines.push(`<b>🏦 RINGKASAN &amp; ANALISA BANDAR — ${escapeHtml(sym)}</b>`);
+  lines.push(`<b>🏦 RINGKASAN BANDAR — ${escapeHtml(sym)}</b>`);
 
   if (!brokerAnalysis) {
-    lines.push("");
     lines.push("<i>Data broker belum tersedia.</i>");
     return lines.join("\n");
   }
 
   const a = brokerAnalysis;
-  lines.push("");
-  lines.push(`<b>📅 Periode:</b> ${escapeHtml(a.date || "—")}`);
-  lines.push("");
-
-  // Narasi headline
   const toneEmoji =
     a.narrative.tone === "green" ? "🟢"
     : a.narrative.tone === "red" ? "🔴"
     : a.narrative.tone === "amber" ? "🟡"
     : "⚪";
+
+  lines.push(`<i>📅 ${escapeHtml(a.date || "—")}</i>`);
+  lines.push("");
   lines.push(`${toneEmoji} <b>${escapeHtml(a.narrative.headline)}</b>`);
-  lines.push(`<i>${escapeHtml(a.narrative.detail)}</i>`);
+  // Pendekkan narasi detail ke ~180 char
+  const detail = a.narrative.detail.length > 180
+    ? a.narrative.detail.slice(0, 177).trimEnd() + "…"
+    : a.narrative.detail;
+  lines.push(escapeHtml(detail));
   lines.push("");
 
-  // Total flow
-  lines.push("<b>💰 Aliran Dana</b>");
-  lines.push(`• Total Buy   : <code>${escapeHtml(fmtIDR(a.totalBuy))}</code>`);
-  lines.push(`• Total Sell  : <code>${escapeHtml(fmtIDR(a.totalSell))}</code>`);
-  lines.push(`• Net BSA     : <code>${escapeHtml(fmtIDR(a.netBSA))}</code>`);
-  lines.push("");
-  lines.push("<b>🌐 Komposisi</b>");
-  lines.push(`• Asing       : <code>${escapeHtml(fmtIDR(a.netAsing))}</code>`);
-  lines.push(`• Lokal       : <code>${escapeHtml(fmtIDR(a.netLokal))}</code>`);
+  // Aliran dana — 1 baris kompak
+  lines.push(
+    `💰 B:<code>${escapeHtml(fmtIDRShort(a.totalBuy))}</code> S:<code>${escapeHtml(fmtIDRShort(a.totalSell))}</code> Net:<code>${escapeHtml(fmtIDRShort(a.netBSA))}</code>`,
+  );
+  // Komposisi — 1 baris
+  const compParts = [
+    `Asing <code>${escapeHtml(fmtIDRShort(a.netAsing))}</code>`,
+    `Lokal <code>${escapeHtml(fmtIDRShort(a.netLokal))}</code>`,
+  ];
   if (a.netUnknown !== 0) {
-    lines.push(`• Unknown     : <code>${escapeHtml(fmtIDR(a.netUnknown))}</code>`);
+    compParts.push(`Unk <code>${escapeHtml(fmtIDRShort(a.netUnknown))}</code>`);
   }
+  lines.push(`🌐 ${compParts.join(" | ")}`);
   lines.push("");
 
-  // Top buyer/seller per kategori
-  if (a.topAsingBuyer || a.topAsingSeller) {
-    lines.push("<b>🌎 Top Asing</b>");
-    if (a.topAsingBuyer) {
-      lines.push(
-        `• 🟢 Buy : <b>${escapeHtml(a.topAsingBuyer.code)}</b> ${escapeHtml(a.topAsingBuyer.info.name)} — <code>${escapeHtml(fmtIDR(a.topAsingBuyer.value))}</code>`,
-      );
-    }
-    if (a.topAsingSeller) {
-      lines.push(
-        `• 🔴 Sell: <b>${escapeHtml(a.topAsingSeller.code)}</b> ${escapeHtml(a.topAsingSeller.info.name)} — <code>${escapeHtml(fmtIDR(a.topAsingSeller.value))}</code>`,
-      );
-    }
-    lines.push("");
+  // Top buyer / seller — gabungkan asing & lokal jadi 2 baris saja
+  const buyerParts: string[] = [];
+  if (a.topAsingBuyer) {
+    buyerParts.push(`A:<b>${escapeHtml(a.topAsingBuyer.code)}</b> ${escapeHtml(fmtIDRShort(a.topAsingBuyer.value))}`);
   }
-  if (a.topLokalBuyer || a.topLokalSeller) {
-    lines.push("<b>🇮🇩 Top Lokal</b>");
-    if (a.topLokalBuyer) {
-      lines.push(
-        `• 🟢 Buy : <b>${escapeHtml(a.topLokalBuyer.code)}</b> ${escapeHtml(a.topLokalBuyer.info.name)} — <code>${escapeHtml(fmtIDR(a.topLokalBuyer.value))}</code>`,
-      );
-    }
-    if (a.topLokalSeller) {
-      lines.push(
-        `• 🔴 Sell: <b>${escapeHtml(a.topLokalSeller.code)}</b> ${escapeHtml(a.topLokalSeller.info.name)} — <code>${escapeHtml(fmtIDR(a.topLokalSeller.value))}</code>`,
-      );
-    }
-    lines.push("");
+  if (a.topLokalBuyer) {
+    buyerParts.push(`L:<b>${escapeHtml(a.topLokalBuyer.code)}</b> ${escapeHtml(fmtIDRShort(a.topLokalBuyer.value))}`);
   }
+  if (buyerParts.length) lines.push(`🟢 Top Buy  | ${buyerParts.join(" • ")}`);
+
+  const sellerParts: string[] = [];
+  if (a.topAsingSeller) {
+    sellerParts.push(`A:<b>${escapeHtml(a.topAsingSeller.code)}</b> ${escapeHtml(fmtIDRShort(a.topAsingSeller.value))}`);
+  }
+  if (a.topLokalSeller) {
+    sellerParts.push(`L:<b>${escapeHtml(a.topLokalSeller.code)}</b> ${escapeHtml(fmtIDRShort(a.topLokalSeller.value))}`);
+  }
+  if (sellerParts.length) lines.push(`🔴 Top Sell | ${sellerParts.join(" • ")}`);
 
   return lines.join("\n").trimEnd();
 }
@@ -324,7 +357,7 @@ function formatBrokerConsistency(
     title: string,
     icon: string,
     entries: ConsistencyEntry[],
-    limit = 5,
+    limit = 3,
   ) => {
     lines.push("");
     lines.push(`${icon} <b>${escapeHtml(title)}</b>`);
@@ -332,25 +365,27 @@ function formatBrokerConsistency(
       lines.push("<i>— tidak ada</i>");
       return;
     }
-    entries.slice(0, limit).forEach((e, i) => {
-      const w = e.weeklyValue ? fmtIDR(e.weeklyValue) : "—";
-      const d = e.dailyValue ? fmtIDR(e.dailyValue) : "—";
+    // Dedup berdasarkan code (broker yang sama bisa muncul di beberapa bucket sumber).
+    const seen = new Set<string>();
+    const unique = entries.filter((e) => {
+      if (seen.has(e.code)) return false;
+      seen.add(e.code);
+      return true;
+    });
+    unique.slice(0, limit).forEach((e, i) => {
+      const w = e.weeklyValue ? fmtIDRShort(e.weeklyValue) : "—";
+      const d = e.dailyValue ? fmtIDRShort(e.dailyValue) : "—";
+      // 1 baris per broker: "1. CODE Nama • W:+xJt D:+yJt"
       lines.push(
-        `${i + 1}. <b>${escapeHtml(e.code)}</b> ${escapeHtml(e.info.name)}`,
+        `${i + 1}. <b>${escapeHtml(e.code)}</b> ${escapeHtml(shortName(e.info.name))} • <code>W:${escapeHtml(w)} D:${escapeHtml(d)}</code>`,
       );
-      lines.push(
-        `   <code>W:${escapeHtml(w)} | D:${escapeHtml(d)}</code>`,
-      );
-      lines.push(`   <i>${escapeHtml(e.reason)}</i>`);
     });
   };
 
-  renderBucket("CONTROLLER (Akumulator Konsisten)", "🟢", c.topAccumulators);
+  renderBucket("CONTROLLER (Akumulator)", "🟢", c.topAccumulators);
+  renderBucket("KONFIRMASI (Baru Akumulasi)", "🔵", c.newOrFlipAkum);
 
-  // Konfirmasi: broker baru masuk akumulasi (NEW_AKUM + FLIP_TO_AKUM)
-  renderBucket("KONFIRMASI (Broker Baru Akumulasi)", "🔵", c.newOrFlipAkum);
-
-  // Distributor: konsisten dist + flip warning
+  // Distributor: prioritaskan flip warning dulu (lebih bahaya), lalu konsisten.
   const distributors: ConsistencyEntry[] = [
     ...c.flipWarning,
     ...c.konsistenDist,
@@ -359,8 +394,11 @@ function formatBrokerConsistency(
   renderBucket("DISTRIBUTOR (Penekan Jual)", "🔴", distributors);
 
   lines.push("");
-  lines.push(`<b>📝 Kesimpulan:</b>`);
-  lines.push(`<i>${escapeHtml(c.conclusion)}</i>`);
+  // Pendekkan kesimpulan ke ~220 char
+  const concl = c.conclusion.length > 220
+    ? c.conclusion.slice(0, 217).trimEnd() + "…"
+    : c.conclusion;
+  lines.push(`<b>📝 Kesimpulan:</b> <i>${escapeHtml(concl)}</i>`);
 
   return lines.join("\n").trimEnd();
 }
@@ -399,5 +437,5 @@ export function buildAnalysisMessage(args: {
   // 3. Analisa Bandar — Controller, Konfirmasi, Distributor
   sections.push(formatBrokerConsistency(args.brokerConsistency, sym));
 
-  return sections.join("\n\n———————————————\n\n");
+  return sections.join("\n\n———\n\n");
 }
