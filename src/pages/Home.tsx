@@ -12,6 +12,7 @@ import {
   LogOut,
   RefreshCw,
   Save,
+  Send,
   X,
 } from "lucide-react";
 import { ResultTable } from "@/components/ResultTable";
@@ -21,8 +22,16 @@ import { BrokerCompareCard } from "@/components/BrokerCompareCard";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { SavedListModal } from "@/components/SavedListModal";
 import { LoginScreen } from "@/components/LoginScreen";
+import { TelegramSettingsModal } from "@/components/TelegramSettingsModal";
+import { TelegramConfirmModal } from "@/components/TelegramConfirmModal";
 import { useToast } from "@/components/ToastHost";
 import { listSaved, saveItem, type SavedItem } from "@/lib/storage";
+import {
+  buildAnalysisMessage,
+  loadAskBeforeSend,
+  loadTelegramConfig,
+  sendTelegramMessage,
+} from "@/lib/telegram";
 import {
   autoSync,
   clearConfig,
@@ -207,6 +216,9 @@ export function HomePage() {
   const [showResult, setShowResult] = useState(false);
   const [showSavedList, setShowSavedList] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
+  const [showTelegramSettings, setShowTelegramSettings] = useState(false);
+  const [showTelegramConfirm, setShowTelegramConfirm] = useState(false);
+  const [telegramSending, setTelegramSending] = useState(false);
   const [hasCloudSync, setHasCloudSync] = useState(() => !!loadConfig());
   const [syncMenuOpen, setSyncMenuOpen] = useState(false);
   const [syncBusy, setSyncBusy] = useState(false);
@@ -291,7 +303,51 @@ export function HomePage() {
   };
 
   const handleCloseResult = () => {
+    // Tutup hasil. Kalau user mau, tampilkan konfirmasi kirim ke Telegram.
+    const askBefore = loadAskBeforeSend();
+    const hasAnything = !!(merged || brokerAnalysis || brokerComparison);
     setShowResult(false);
+    if (askBefore && hasAnything) {
+      // beri jeda kecil supaya animasi modal hasil sempat menutup dulu
+      window.setTimeout(() => setShowTelegramConfirm(true), 120);
+    }
+  };
+
+  const handleSendTelegram = async () => {
+    const cfg = loadTelegramConfig();
+    if (!cfg) {
+      toast.error(
+        "Telegram belum disetel",
+        "Atur Bot Token dan Chat ID dulu di pengaturan.",
+      );
+      return;
+    }
+    setTelegramSending(true);
+    const id = toast.loading("Mengirim ke Telegram...", "Sebentar ya.");
+    try {
+      const text = buildAnalysisMessage({
+        symbol,
+        merged,
+        brokerAnalysis,
+        brokerConsistency,
+      });
+      await sendTelegramMessage(cfg, text);
+      toast.update(id, {
+        kind: "success",
+        title: "Terkirim ke Telegram",
+        description: `Hasil analisa ${symbol || "saham"} sudah dikirim.`,
+      });
+      setShowTelegramConfirm(false);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast.update(id, {
+        kind: "error",
+        title: "Gagal kirim ke Telegram",
+        description: msg.slice(0, 160),
+      });
+    } finally {
+      setTelegramSending(false);
+    }
   };
 
   const handleSaveCurrent = (ket: string): boolean => {
@@ -675,6 +731,14 @@ export function HomePage() {
             Reset
           </button>
           <button
+            onClick={() => setShowTelegramSettings(true)}
+            title="Pengaturan Telegram"
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-md bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 ring-1 ring-sky-500/30 text-sm font-semibold transition-colors"
+          >
+            <Send className="h-4 w-4" />
+            Telegram
+          </button>
+          <button
             onClick={() => {
               setSavedCount(listSaved().length);
               setShowSavedList(true);
@@ -818,6 +882,28 @@ export function HomePage() {
           onClose={() => setShowLogin(false)}
           onConnected={handleConnected}
           allowSkip={!hasCloudSync}
+        />
+      )}
+
+      {showTelegramSettings && (
+        <TelegramSettingsModal
+          onClose={() => setShowTelegramSettings(false)}
+        />
+      )}
+
+      {showTelegramConfirm && (
+        <TelegramConfirmModal
+          symbol={symbol}
+          hasConfig={!!loadTelegramConfig()}
+          onYes={() => {
+            if (telegramSending) return;
+            void handleSendTelegram();
+          }}
+          onNo={() => setShowTelegramConfirm(false)}
+          onOpenSettings={() => {
+            setShowTelegramConfirm(false);
+            setShowTelegramSettings(true);
+          }}
         />
       )}
     </div>
