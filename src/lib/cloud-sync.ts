@@ -7,8 +7,24 @@ export type SyncConfig = {
 };
 
 const CONFIG_KEY = "auto-merge-saham:sync-v1";
+const SKIPPED_KEY = "auto-merge-saham:sync-skipped-v1";
 const FILENAME = "auto-merge-saham.json";
 const GIST_DESC = "auto-merge-saham — saved data sync";
+
+export function wasSkipped(): boolean {
+  if (typeof window === "undefined") return false;
+  return window.localStorage.getItem(SKIPPED_KEY) === "1";
+}
+
+export function markSkipped(): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(SKIPPED_KEY, "1");
+}
+
+export function clearSkipped(): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(SKIPPED_KEY);
+}
 
 export function loadConfig(): SyncConfig | null {
   if (typeof window === "undefined") return null;

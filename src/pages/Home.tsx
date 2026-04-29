@@ -1,13 +1,29 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Calendar, Check, Copy, Database, Hash, Save, X } from "lucide-react";
+import {
+  Calendar,
+  Check,
+  Cloud,
+  CloudOff,
+  Copy,
+  Database,
+  Hash,
+  Save,
+  X,
+} from "lucide-react";
 import { ResultTable } from "@/components/ResultTable";
 import { SummaryCard } from "@/components/SummaryCard";
 import { TopBrokerCard } from "@/components/TopBrokerCard";
 import { BrokerCompareCard } from "@/components/BrokerCompareCard";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { SavedListModal } from "@/components/SavedListModal";
+import { LoginScreen } from "@/components/LoginScreen";
 import { listSaved, saveItem, type SavedItem } from "@/lib/storage";
-import { autoSync, loadConfig, pullAndMerge } from "@/lib/cloud-sync";
+import {
+  autoSync,
+  loadConfig,
+  pullAndMerge,
+  wasSkipped,
+} from "@/lib/cloud-sync";
 import { mergeInputs, type MergedTable } from "@/lib/merger";
 import {
   parseBrokerActivity,
@@ -185,6 +201,8 @@ export function HomePage() {
   const [submitted, setSubmitted] = useState<Record<SourceKey, string> | null>(null);
   const [showResult, setShowResult] = useState(false);
   const [showSavedList, setShowSavedList] = useState(false);
+  const [showLogin, setShowLogin] = useState(false);
+  const [hasCloudSync, setHasCloudSync] = useState(() => !!loadConfig());
   const [savedCount, setSavedCount] = useState<number>(() =>
     typeof window === "undefined" ? 0 : listSaved().length,
   );
@@ -293,22 +311,34 @@ export function HomePage() {
     };
   }, [showResult]);
 
-  // Saat halaman dimuat, kalau cloud sync sudah disetel, tarik & merge dari Gist.
+  // Saat halaman dimuat: kalau sudah punya konfig, langsung tarik & merge.
+  // Kalau belum & user belum pernah lewati, tampilkan layar login.
   useEffect(() => {
-    if (!loadConfig()) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const merged = await pullAndMerge();
-        if (!cancelled && merged) setSavedCount(merged.length);
-      } catch (e) {
-        console.warn("[cloud-sync] pull on mount gagal:", e);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
+    const cfg = loadConfig();
+    if (cfg) {
+      let cancelled = false;
+      (async () => {
+        try {
+          const merged = await pullAndMerge();
+          if (!cancelled && merged) setSavedCount(merged.length);
+        } catch (e) {
+          console.warn("[cloud-sync] pull on mount gagal:", e);
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }
+    if (!wasSkipped()) {
+      setShowLogin(true);
+    }
   }, []);
+
+  const handleConnected = () => {
+    setHasCloudSync(true);
+    setShowLogin(false);
+    setSavedCount(listSaved().length);
+  };
 
   const { merged } = useMemo(() => {
     if (!submitted) return { merged: null };
@@ -521,6 +551,31 @@ export function HomePage() {
               </span>
             )}
           </button>
+          <button
+            onClick={() => setShowLogin(true)}
+            title={
+              hasCloudSync
+                ? "Tersinkron ke GitHub Gist"
+                : "Login GitHub untuk sync data"
+            }
+            className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-md text-sm font-semibold transition-colors ${
+              hasCloudSync
+                ? "bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 ring-1 ring-emerald-500/30"
+                : "bg-muted hover:bg-muted/70 text-foreground"
+            }`}
+          >
+            {hasCloudSync ? (
+              <>
+                <Cloud className="h-4 w-4" />
+                Tersinkron
+              </>
+            ) : (
+              <>
+                <CloudOff className="h-4 w-4" />
+                Login GitHub
+              </>
+            )}
+          </button>
           <div className="ml-auto text-xs text-muted-foreground flex items-center gap-2">
             <Calendar className="h-3.5 w-3.5" />
             {filledCount} dari {SOURCES.length} sumber terisi
@@ -546,6 +601,19 @@ export function HomePage() {
         <SavedListModal
           onClose={() => setShowSavedList(false)}
           onView={handleViewSaved}
+          onOpenLogin={() => {
+            setShowSavedList(false);
+            setShowLogin(true);
+          }}
+          onSyncChanged={() => setHasCloudSync(!!loadConfig())}
+        />
+      )}
+
+      {showLogin && (
+        <LoginScreen
+          onClose={() => setShowLogin(false)}
+          onConnected={handleConnected}
+          allowSkip={!hasCloudSync}
         />
       )}
     </div>
