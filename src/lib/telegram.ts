@@ -10,6 +10,7 @@ import type {
   ConsistencyAnalysis,
   ConsistencyEntry,
 } from "./parser-broker";
+import { computeRecommendation, type Tone as RecTone } from "./recommendation";
 
 const STORAGE_KEY = "ams.telegram.config.v1";
 const ASK_BEFORE_SEND_KEY = "ams.telegram.askBeforeSend";
@@ -262,35 +263,64 @@ function formatMergedTable(merged: MergedTable, symbol: string): string {
   return lines.join("\n");
 }
 
-// Ringkasan & analisa bandar (versi ringkas untuk Telegram).
+// Emoji nada untuk konsistensi dgn UI (green/red/amber/neutral).
+function toneEmoji(t: RecTone): string {
+  return t === "green" ? "🟢" : t === "red" ? "🔴" : t === "amber" ? "🟡" : "⚪";
+}
+
+// Ringkasan & Analisa Bandar — mirror konten kartu di UI (RecommendationBanner
+// + KONFIRMASI BROKER). Output di Telegram mengikuti app persis: rekomendasi
+// (label + score), headline, detail, chip alasan, dan konfirmasi broker.
 function formatBrokerSummary(
+  merged: MergedTable | null,
   brokerAnalysis: BrokerAnalysis | null,
   symbol: string,
 ): string {
   const lines: string[] = [];
   const sym = symbol.trim() || "—";
-  lines.push(`<b>🏦 RINGKASAN BANDAR — ${escapeHtml(sym)}</b>`);
+  lines.push(`<b>🏦 RINGKASAN &amp; ANALISA BANDAR — ${escapeHtml(sym)}</b>`);
 
-  if (!brokerAnalysis) {
-    lines.push("<i>Data broker belum tersedia.</i>");
+  const result = merged ? computeRecommendation(merged, brokerAnalysis) : null;
+
+  if (!result) {
+    lines.push("<i>Data analisa belum tersedia.</i>");
     return lines.join("\n");
   }
 
-  const a = brokerAnalysis;
-  const toneEmoji =
-    a.narrative.tone === "green" ? "🟢"
-    : a.narrative.tone === "red" ? "🔴"
-    : a.narrative.tone === "amber" ? "🟡"
-    : "⚪";
+  const { recommendation, score, reasonsTopFour, periodLabel, days, brokerInsight } = result;
+  const scoreSign = score > 0 ? "+" : "";
 
-  lines.push(`<i>📅 ${escapeHtml(a.date || "—")}</i>`);
+  lines.push(
+    `<i>📅 ${escapeHtml(periodLabel)} • ${days.length} hari terakhir</i>`,
+  );
   lines.push("");
-  lines.push(`${toneEmoji} <b>${escapeHtml(a.narrative.headline)}</b>`);
-  // Pendekkan narasi detail ke ~180 char
-  const detail = a.narrative.detail.length > 180
-    ? a.narrative.detail.slice(0, 177).trimEnd() + "…"
-    : a.narrative.detail;
-  lines.push(escapeHtml(detail));
+
+  // Banner rekomendasi
+  lines.push(
+    `${toneEmoji(recommendation.tone)} <b>REKOMENDASI: ${escapeHtml(recommendation.label)}</b>  <i>(skor ${scoreSign}${score.toFixed(1)})</i>`,
+  );
+  lines.push(`🎯 <b>${escapeHtml(recommendation.headline)}</b>`);
+  lines.push(escapeHtml(recommendation.detail));
+
+  // Chip alasan (gabungkan jadi satu baris pakai bullet).
+  if (reasonsTopFour.length > 0) {
+    const chips = reasonsTopFour
+      .map((r) => `${toneEmoji(r.tone)} ${escapeHtml(r.text)}`)
+      .join("  •  ");
+    lines.push("");
+    lines.push(chips);
+  }
+
+  // KONFIRMASI BROKER · tanggal
+  if (brokerInsight) {
+    lines.push("");
+    lines.push(
+      `🏢 <b>KONFIRMASI BROKER</b> · <i>${escapeHtml(brokerInsight.date || "—")}</i>`,
+    );
+    lines.push(
+      `<b>${escapeHtml(brokerInsight.verdictPrefix)}</b> ${escapeHtml(brokerInsight.insight)}`,
+    );
+  }
 
   return lines.join("\n").trimEnd();
 }
@@ -394,7 +424,7 @@ export function buildAnalysisMessage(args: {
   );
 
   // 1. Ringkasan & Analisa Bandar
-  sections.push(formatBrokerSummary(args.brokerAnalysis, sym));
+  sections.push(formatBrokerSummary(args.merged, args.brokerAnalysis, sym));
 
   // 2. Hasil Gabungan Data
   if (args.merged) {
