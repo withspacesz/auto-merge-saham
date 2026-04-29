@@ -65,3 +65,18 @@
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
 }
+
+@keyframes toast-bar-shrink {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+
+.animate-toast-bar {
+  animation-name: toast-bar-shrink;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}

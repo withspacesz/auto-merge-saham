@@ -18,6 +18,7 @@ import {
   pullAndMerge,
   saveConfig,
 } from "@/lib/cloud-sync";
+import { useToast } from "@/components/ToastHost";
 
 type Props = {
   onClose: () => void;
@@ -32,6 +33,7 @@ export function LoginScreen({ onClose, onConnected, allowSkip = true }: Props) {
   const [gistInput, setGistInput] = useState(existing?.gistId ?? "");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const toast = useToast();
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -55,14 +57,21 @@ export function LoginScreen({ onClose, onConnected, allowSkip = true }: Props) {
     const token = tokenInput.trim();
     if (!token) {
       setErr("Token tidak boleh kosong.");
+      toast.error("Token kosong", "Tempel Personal Access Token dulu.");
       return;
     }
     setBusy(true);
     setErr(null);
+    const loadingId = toast.loading(
+      "Menyambungkan ke GitHub...",
+      "Verifikasi token & gist.",
+    );
     try {
       let gistId = gistInput.trim();
+      let createdNew = false;
       if (!gistId) {
         gistId = await createGist(token, listSaved());
+        createdNew = true;
       }
       saveConfig({ token, gistId, lastSyncAt: new Date().toISOString() });
       // Sekalian tarik & merge biar konsisten
@@ -71,10 +80,22 @@ export function LoginScreen({ onClose, onConnected, allowSkip = true }: Props) {
       } catch {
         /* not fatal */
       }
+      toast.update(loadingId, {
+        kind: "success",
+        title: createdNew ? "Gist baru dibuat" : "Tersambung ke gist",
+        description: createdNew
+          ? "Gist privat berhasil dibuat di akun GitHub kamu."
+          : "Berhasil sambung ke gist yang ada.",
+      });
       onConnected();
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       setErr(`Gagal sambungkan: ${msg}`);
+      toast.update(loadingId, {
+        kind: "error",
+        title: "Gagal login",
+        description: msg.slice(0, 160),
+      });
     } finally {
       setBusy(false);
     }

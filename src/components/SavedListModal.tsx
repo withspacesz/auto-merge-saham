@@ -21,6 +21,7 @@ import {
   loadConfig,
   pullAndMerge,
 } from "@/lib/cloud-sync";
+import { useToast } from "@/components/ToastHost";
 
 type Props = {
   onClose: () => void;
@@ -40,10 +41,7 @@ export function SavedListModal({
 
   const [config, setConfig] = useState(() => loadConfig());
   const [syncing, setSyncing] = useState(false);
-  const [syncMsg, setSyncMsg] = useState<{
-    text: string;
-    kind: "ok" | "err";
-  } | null>(null);
+  const toast = useToast();
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -58,29 +56,48 @@ export function SavedListModal({
   }, [onClose]);
 
   const handleDelete = (id: string) => {
+    const item = items.find((x) => x.id === id);
     const next = deleteSaved(id);
     setItems(next);
     setConfirmDeleteId(null);
-    void autoSync();
+    toast.success(
+      "Data dihapus",
+      `${item?.symbol || "—"} dihapus. Sisa ${next.length} data.`,
+    );
+    if (loadConfig()) {
+      void autoSync().then(() => {
+        toast.info(
+          "Cloud diperbarui",
+          "Penghapusan ikut tersinkron ke GitHub.",
+        );
+      });
+    }
   };
 
   const refresh = () => setItems(listSaved());
 
-  const flashMsg = (text: string, kind: "ok" | "err") => {
-    setSyncMsg({ text, kind });
-    window.setTimeout(() => setSyncMsg(null), 3500);
-  };
-
   const handlePull = async () => {
     setSyncing(true);
+    const loadingId = toast.loading(
+      "Menarik data dari cloud...",
+      "Sebentar ya.",
+    );
     try {
-      await pullAndMerge();
+      const merged = await pullAndMerge();
       refresh();
       setConfig(loadConfig());
-      flashMsg("Tarik dari cloud berhasil.", "ok");
+      toast.update(loadingId, {
+        kind: "success",
+        title: "Berhasil tarik dari cloud",
+        description: `${merged?.length ?? 0} data tersinkron.`,
+      });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      flashMsg(`Gagal tarik: ${msg}`, "err");
+      toast.update(loadingId, {
+        kind: "error",
+        title: "Gagal tarik data",
+        description: msg.slice(0, 140),
+      });
     } finally {
       setSyncing(false);
     }
@@ -90,7 +107,7 @@ export function SavedListModal({
     clearConfig();
     setConfig(null);
     onSyncChanged?.();
-    flashMsg("Cloud sync diputuskan. Data lokal tetap.", "ok");
+    toast.info("Sinkron diputuskan", "Data lokal tetap aman.");
   };
 
   return (
@@ -177,15 +194,6 @@ export function SavedListModal({
                 Login GitHub
               </button>
             </>
-          )}
-          {syncMsg && (
-            <span
-              className={`ml-auto text-[11px] font-medium ${
-                syncMsg.kind === "ok" ? "text-emerald-300" : "text-red-300"
-              }`}
-            >
-              {syncMsg.text}
-            </span>
           )}
         </div>
 

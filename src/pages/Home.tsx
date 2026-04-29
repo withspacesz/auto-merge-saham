@@ -21,6 +21,7 @@ import { BrokerCompareCard } from "@/components/BrokerCompareCard";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { SavedListModal } from "@/components/SavedListModal";
 import { LoginScreen } from "@/components/LoginScreen";
+import { useToast } from "@/components/ToastHost";
 import { listSaved, saveItem, type SavedItem } from "@/lib/storage";
 import {
   autoSync,
@@ -216,6 +217,7 @@ export function HomePage() {
   const [savedCount, setSavedCount] = useState<number>(() =>
     typeof window === "undefined" ? 0 : listSaved().length,
   );
+  const toast = useToast();
 
   // Defensif: kalau state lama (sebelum brokerPrev ditambahkan) di-rehydrate
   // oleh HMR, beberapa key bisa undefined. Pastikan selalu string.
@@ -234,6 +236,13 @@ export function HomePage() {
   const handleMerge = () => {
     setSubmitted({ ...data });
     setShowResult(true);
+    const filled = (Object.values(data) as string[]).filter(
+      (v) => v.trim().length > 0,
+    ).length;
+    toast.success(
+      "Analisa siap",
+      `${symbol.trim() || "—"} • ${filled} sumber digabungkan.`,
+    );
   };
 
   const handleReset = () => {
@@ -241,6 +250,7 @@ export function HomePage() {
     setSubmitted(null);
     setSymbol("");
     setShowResult(false);
+    toast.info("Form di-reset", "Semua input dikosongkan.");
   };
 
   const handleSample = () => {
@@ -248,6 +258,7 @@ export function HomePage() {
     setSymbol("ESIP");
     setSubmitted(SAMPLE);
     setShowResult(true);
+    toast.info("Data contoh dimuat", "Saham ESIP — siap dianalisa.");
   };
 
   // Auto-deteksi kode saham dari teks yang di-paste.
@@ -294,15 +305,44 @@ export function HomePage() {
       filledCount: filled,
       data: { ...submitted },
     });
-    setSavedCount(listSaved().length);
-    // Sinkronkan ke GitHub Gist (kalau sudah disetel) — fire & forget.
-    void autoSync();
+    const total = listSaved().length;
+    setSavedCount(total);
+    const sym = symbol.trim() || "—";
+    toast.success(
+      "Data tersimpan",
+      `${sym} • ${filled} sumber. Total ${total} data tersimpan.`,
+    );
+    // Sinkronkan ke GitHub Gist (kalau sudah disetel)
+    if (loadConfig()) {
+      const pushId = toast.loading("Sinkron ke cloud...", "Mengirim ke GitHub.");
+      autoSync()
+        .then(() => {
+          toast.update(pushId, {
+            kind: "success",
+            title: "Tersinkron ke cloud",
+            description: `${total} data ada di akun GitHub kamu.`,
+          });
+          setLastSyncAt(loadConfig()?.lastSyncAt ?? null);
+        })
+        .catch((e) => {
+          const msg = e instanceof Error ? e.message : String(e);
+          toast.update(pushId, {
+            kind: "error",
+            title: "Gagal sinkron ke cloud",
+            description: msg.slice(0, 140),
+          });
+        });
+    }
     return true;
   };
 
   const handleViewSaved = (item: SavedItem) => {
     setData({ ...item.data });
     setSubmitted({ ...item.data });
+    toast.info(
+      "Membuka data tersimpan",
+      `${item.symbol || "—"}${item.ket ? ` • ${item.ket}` : ""}`,
+    );
     setSymbol(item.symbol === "—" ? "" : item.symbol);
     setShowSavedList(false);
     setShowResult(true);
@@ -366,18 +406,39 @@ export function HomePage() {
   const handleConnected = () => {
     setHasCloudSync(true);
     setShowLogin(false);
-    setSavedCount(listSaved().length);
+    const count = listSaved().length;
+    setSavedCount(count);
     setLastSyncAt(loadConfig()?.lastSyncAt ?? null);
+    toast.success(
+      "Login berhasil",
+      count > 0
+        ? `${count} data dari cloud sudah tersinkron.`
+        : "Tersambung ke GitHub Gist.",
+    );
   };
 
   const handlePullNow = async () => {
     setSyncBusy(true);
+    const loadingId = toast.loading(
+      "Menarik data dari cloud...",
+      "Sebentar ya.",
+    );
     try {
       const merged = await pullAndMerge();
       if (merged) setSavedCount(merged.length);
       setLastSyncAt(loadConfig()?.lastSyncAt ?? null);
+      toast.update(loadingId, {
+        kind: "success",
+        title: "Berhasil tarik dari cloud",
+        description: `${merged?.length ?? 0} data tersinkron.`,
+      });
     } catch (e) {
-      console.warn("[cloud-sync] manual pull gagal:", e);
+      const msg = e instanceof Error ? e.message : String(e);
+      toast.update(loadingId, {
+        kind: "error",
+        title: "Gagal tarik data",
+        description: msg.slice(0, 140),
+      });
     } finally {
       setSyncBusy(false);
     }
@@ -388,6 +449,7 @@ export function HomePage() {
     setHasCloudSync(false);
     setSyncMenuOpen(false);
     setLastSyncAt(null);
+    toast.info("Berhasil keluar", "Data di akun GitHub kamu tetap aman.");
   };
 
   const { merged } = useMemo(() => {
