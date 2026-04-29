@@ -253,6 +253,8 @@ function formatMergedTable(merged: MergedTable, symbol: string): string {
     lines.push(escapeHtml(cells));
   }
   if (totalRow) {
+    // Garis pemisah sebelum baris TOTAL (mirip tampilan di app)
+    lines.push(escapeHtml(sepLine));
     const cells = usedHeaders
       .map((h) => pad(cleanCell(h, String(totalRow[h] ?? "")), widths[h]))
       .join(" │ ");
@@ -309,26 +311,6 @@ function formatBrokerSummary(
     compParts.push(`Unk <code>${escapeHtml(fmtIDRShort(a.netUnknown))}</code>`);
   }
   lines.push(`🌐 ${compParts.join(" | ")}`);
-  lines.push("");
-
-  // Top buyer / seller — gabungkan asing & lokal jadi 2 baris saja
-  const buyerParts: string[] = [];
-  if (a.topAsingBuyer) {
-    buyerParts.push(`A:<b>${escapeHtml(a.topAsingBuyer.code)}</b> ${escapeHtml(fmtIDRShort(a.topAsingBuyer.value))}`);
-  }
-  if (a.topLokalBuyer) {
-    buyerParts.push(`L:<b>${escapeHtml(a.topLokalBuyer.code)}</b> ${escapeHtml(fmtIDRShort(a.topLokalBuyer.value))}`);
-  }
-  if (buyerParts.length) lines.push(`🟢 Top Buy  | ${buyerParts.join(" • ")}`);
-
-  const sellerParts: string[] = [];
-  if (a.topAsingSeller) {
-    sellerParts.push(`A:<b>${escapeHtml(a.topAsingSeller.code)}</b> ${escapeHtml(fmtIDRShort(a.topAsingSeller.value))}`);
-  }
-  if (a.topLokalSeller) {
-    sellerParts.push(`L:<b>${escapeHtml(a.topLokalSeller.code)}</b> ${escapeHtml(fmtIDRShort(a.topLokalSeller.value))}`);
-  }
-  if (sellerParts.length) lines.push(`🔴 Top Sell | ${sellerParts.join(" • ")}`);
 
   return lines.join("\n").trimEnd();
 }
@@ -375,15 +357,19 @@ function formatBrokerConsistency(
     unique.slice(0, limit).forEach((e, i) => {
       const w = e.weeklyValue ? fmtIDRShort(e.weeklyValue) : "—";
       const d = e.dailyValue ? fmtIDRShort(e.dailyValue) : "—";
-      // 1 baris per broker: "1. CODE Nama • W:+xJt D:+yJt"
+      // Format jelas: "Mingguan" vs "Hari ini" supaya tidak ambigu
       lines.push(
-        `${i + 1}. <b>${escapeHtml(e.code)}</b> ${escapeHtml(shortName(e.info.name))} • <code>W:${escapeHtml(w)} D:${escapeHtml(d)}</code>`,
+        `${i + 1}. <b>${escapeHtml(e.code)}</b> ${escapeHtml(shortName(e.info.name))}`,
+      );
+      lines.push(
+        `   <code>Mingguan: ${escapeHtml(w)} | Hari ini: ${escapeHtml(d)}</code>`,
       );
     });
   };
 
-  renderBucket("CONTROLLER (Akumulator)", "🟢", c.topAccumulators);
-  renderBucket("KONFIRMASI (Baru Akumulasi)", "🔵", c.newOrFlipAkum);
+  renderBucket("CONTROLLER (Akumulator)", "🟢", c.topAccumulators, 3);
+  // Khusus user request: Konfirmasi & Distributor cukup top 2.
+  renderBucket("KONFIRMASI (Baru Akumulasi)", "🔵", c.newOrFlipAkum, 2);
 
   // Distributor: prioritaskan flip warning dulu (lebih bahaya), lalu konsisten.
   const distributors: ConsistencyEntry[] = [
@@ -391,7 +377,7 @@ function formatBrokerConsistency(
     ...c.konsistenDist,
     ...c.newOrFreshDist,
   ];
-  renderBucket("DISTRIBUTOR (Penekan Jual)", "🔴", distributors);
+  renderBucket("DISTRIBUTOR (Penekan Jual)", "🔴", distributors, 2);
 
   lines.push("");
   // Pendekkan kesimpulan ke ~220 char
