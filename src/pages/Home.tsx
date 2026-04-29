@@ -18,12 +18,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { SavedListModal } from "@/components/SavedListModal";
 import { LoginScreen } from "@/components/LoginScreen";
 import { listSaved, saveItem, type SavedItem } from "@/lib/storage";
-import {
-  autoSync,
-  loadConfig,
-  pullAndMerge,
-  wasSkipped,
-} from "@/lib/cloud-sync";
+import { autoSync, loadConfig, pullAndMerge } from "@/lib/cloud-sync";
 import { mergeInputs, type MergedTable } from "@/lib/merger";
 import {
   parseBrokerActivity,
@@ -312,26 +307,22 @@ export function HomePage() {
   }, [showResult]);
 
   // Saat halaman dimuat: kalau sudah punya konfig, langsung tarik & merge.
-  // Kalau belum & user belum pernah lewati, tampilkan layar login.
+  // Kalau belum, aplikasi terkunci sampai user login.
   useEffect(() => {
     const cfg = loadConfig();
-    if (cfg) {
-      let cancelled = false;
-      (async () => {
-        try {
-          const merged = await pullAndMerge();
-          if (!cancelled && merged) setSavedCount(merged.length);
-        } catch (e) {
-          console.warn("[cloud-sync] pull on mount gagal:", e);
-        }
-      })();
-      return () => {
-        cancelled = true;
-      };
-    }
-    if (!wasSkipped()) {
-      setShowLogin(true);
-    }
+    if (!cfg) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const merged = await pullAndMerge();
+        if (!cancelled && merged) setSavedCount(merged.length);
+      } catch (e) {
+        console.warn("[cloud-sync] pull on mount gagal:", e);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const handleConnected = () => {
@@ -372,6 +363,32 @@ export function HomePage() {
     if (!a || !b) return null;
     return analyzeBrokerConsistency(a, b);
   }, [submitted]);
+
+  // Gerbang login: kalau belum tersinkron, cuma layar login yang tampil.
+  if (!hasCloudSync) {
+    return (
+      <div className="min-h-screen w-full bg-background text-foreground flex flex-col">
+        <div className="flex-1 flex flex-col items-center justify-center px-4 text-center">
+          <div className="max-w-md space-y-3">
+            <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-emerald-400">
+              Auto Merge Saham
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              Gabungkan data saham dari beberapa sumber menjadi satu tabel lengkap.
+              Login dulu pakai GitHub supaya data kamu otomatis tersimpan & sinkron antar perangkat.
+            </p>
+          </div>
+        </div>
+        <LoginScreen
+          onClose={() => {
+            /* tidak bisa ditutup tanpa login */
+          }}
+          onConnected={handleConnected}
+          allowSkip={false}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen w-full bg-background text-foreground">
