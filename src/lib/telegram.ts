@@ -181,11 +181,6 @@ function pad(s: string, len: number, align: "l" | "r" = "l"): string {
 function formatMergedTable(merged: MergedTable, symbol: string): string {
   const lines: string[] = [];
   const sym = symbol.trim() || "—";
-  lines.push(`<b>📊 HASIL GABUNGAN — ${escapeHtml(sym)}</b>`);
-  lines.push(
-    `<i>${merged.sourceCount} sumber • ${merged.matchedDates} tgl cocok</i>`,
-  );
-  lines.push("");
 
   // Kolom inti sesuai permintaan user — tampilkan lengkap.
   const PRIORITY = ["Tanggal", "Price", "NBSA", "MF +/-", "Ket MF", "Ket NBSA"];
@@ -242,7 +237,17 @@ function formatMergedTable(merged: MergedTable, symbol: string): string {
   const headerLine = usedHeaders.map((h) => pad(h, widths[h])).join(" │ ");
   const sepLine = usedHeaders.map((h) => "─".repeat(widths[h])).join("─┼─");
 
+  // Garis pembatas top/bottom selebar tabel (untuk membungkus judul di dalam kotak).
+  const tableWidth = headerLine.length;
+  const fullSep = "─".repeat(tableWidth);
+
   lines.push("<pre>");
+  // Judul section di dalam kotak (sebelumnya di luar).
+  lines.push(escapeHtml(`📊 HASIL GABUNGAN — ${sym}`));
+  lines.push(
+    escapeHtml(`${merged.sourceCount} sumber • ${merged.matchedDates} tgl cocok`),
+  );
+  lines.push(escapeHtml(fullSep));
   lines.push(escapeHtml(headerLine));
   lines.push(escapeHtml(sepLine));
   for (const row of shown) {
@@ -293,24 +298,16 @@ function wrapText(text: string, width: number, indent = ""): string[] {
 // Ringkasan & Analisa Bandar — mirror konten kartu di UI (RecommendationBanner
 // + KONFIRMASI BROKER). Output dibungkus <pre> agar tampil sebagai kotak
 // monospace yang bisa di-copy di Telegram (mirip tampilan HASIL GABUNGAN).
+// Header utama (AUTO MERGE SAHAM + symbol + tanggal) ikut masuk ke dalam
+// kotak ini sebagai baris paling atas.
 function formatBrokerSummary(
   merged: MergedTable | null,
   brokerAnalysis: BrokerAnalysis | null,
   symbol: string,
+  headerInfo: { title: string; subtitle: string },
 ): string {
   const lines: string[] = [];
   const sym = symbol.trim() || "—";
-  lines.push(`<b>🏦 RINGKASAN &amp; ANALISA BANDAR — ${escapeHtml(sym)}</b>`);
-
-  const result = merged ? computeRecommendation(merged, brokerAnalysis) : null;
-
-  if (!result) {
-    lines.push("<i>Data analisa belum tersedia.</i>");
-    return lines.join("\n");
-  }
-
-  const { recommendation, score, reasonsTopFour, periodLabel, days, brokerInsight } = result;
-  const scoreSign = score > 0 ? "+" : "";
 
   // Lebar konten di dalam kotak <pre>. Cukup nyaman dibaca di mobile Telegram.
   const WIDTH = 46;
@@ -330,40 +327,70 @@ function formatBrokerSummary(
 
   const box: string[] = [];
 
-  // Bagian periode
-  box.push(...labelLine("Periode", periodLabel));
-  box.push(...labelLine("Hari", `${days.length} hari terakhir`));
+  // Header utama: AUTO MERGE SAHAM + symbol/tanggal — sebelumnya di luar kotak.
+  box.push(headerInfo.title);
+  box.push(headerInfo.subtitle);
   box.push(sep);
 
-  // Bagian rekomendasi
-  box.push(
-    ...labelLine(
-      "Rekomendasi",
-      `${toneEmoji(recommendation.tone)} ${recommendation.label}  (skor ${scoreSign}${score.toFixed(1)})`,
-    ),
-  );
-  box.push(...labelLine("Headline", `🎯 ${recommendation.headline}`));
-  box.push(...labelLine("Detail", recommendation.detail));
+  // Judul section — sebelumnya di luar kotak, sekarang ikut masuk.
+  box.push(`🏦 RINGKASAN & ANALISA BANDAR — ${sym}`);
+  box.push(sep);
 
-  // Bagian alasan (chips → list di dalam kotak)
-  if (reasonsTopFour.length > 0) {
+  const result = merged ? computeRecommendation(merged, brokerAnalysis) : null;
+
+  if (!result) {
+    box.push("Data analisa belum tersedia.");
+  } else {
+    const {
+      recommendation,
+      score,
+      reasonsTopFour,
+      periodLabel,
+      days,
+      brokerInsight,
+    } = result;
+    const scoreSign = score > 0 ? "+" : "";
+
+    // Bagian periode
+    box.push(...labelLine("Periode", periodLabel));
+    box.push(...labelLine("Hari", `${days.length} hari terakhir`));
     box.push(sep);
-    box.push("Alasan:");
-    for (const r of reasonsTopFour) {
-      const wrapped = wrapText(`${toneEmoji(r.tone)} ${r.text}`, WIDTH - 2, "   ");
-      box.push(" • " + wrapped[0]);
-      for (let i = 1; i < wrapped.length; i++) box.push("   " + wrapped[i]);
+
+    // Bagian rekomendasi
+    box.push(
+      ...labelLine(
+        "Rekomendasi",
+        `${toneEmoji(recommendation.tone)} ${recommendation.label}  (skor ${scoreSign}${score.toFixed(1)})`,
+      ),
+    );
+    box.push(...labelLine("Headline", `🎯 ${recommendation.headline}`));
+    box.push(...labelLine("Detail", recommendation.detail));
+
+    // Bagian alasan (chips → list di dalam kotak)
+    if (reasonsTopFour.length > 0) {
+      box.push(sep);
+      box.push("Alasan:");
+      for (const r of reasonsTopFour) {
+        const wrapped = wrapText(
+          `${toneEmoji(r.tone)} ${r.text}`,
+          WIDTH - 2,
+          "   ",
+        );
+        box.push(" • " + wrapped[0]);
+        for (let i = 1; i < wrapped.length; i++) box.push("   " + wrapped[i]);
+      }
     }
-  }
 
-  // Bagian konfirmasi broker
-  if (brokerInsight) {
-    box.push(sep);
-    box.push(`🏢 KONFIRMASI BROKER · ${brokerInsight.date || "—"}`);
-    box.push("");
-    const verdict = `${brokerInsight.verdictPrefix} ${brokerInsight.insight}`.trim();
-    const wrapped = wrapText(verdict, WIDTH);
-    for (const w of wrapped) box.push(w);
+    // Bagian konfirmasi broker
+    if (brokerInsight) {
+      box.push(sep);
+      box.push(`🏢 KONFIRMASI BROKER · ${brokerInsight.date || "—"}`);
+      box.push("");
+      const verdict =
+        `${brokerInsight.verdictPrefix} ${brokerInsight.insight}`.trim();
+      const wrapped = wrapText(verdict, WIDTH);
+      for (const w of wrapped) box.push(w);
+    }
   }
 
   // Bungkus dalam <pre> agar muncul sebagai kotak copyable di Telegram.
@@ -379,77 +406,91 @@ function formatBrokerSummary(
 //  - Controller   = topAccumulators (akumulator paling konsisten / driver beli)
 //  - Konfirmasi   = newOrFlipAkum   (broker baru masuk akumulasi, konfirmator)
 //  - Distributor  = konsistenDist + flipWarning (driver / risiko sell)
+// Output dibungkus <pre> dengan judul di dalam kotak (mirip section lain).
 function formatBrokerConsistency(
   c: ConsistencyAnalysis | null,
   symbol: string,
 ): string {
-  const lines: string[] = [];
   const sym = symbol.trim() || "—";
-  lines.push(`<b>🎯 ANALISA BANDAR — ${escapeHtml(sym)}</b>`);
-  lines.push(`<i>Controller • Konfirmasi • Distributor</i>`);
+  const WIDTH = 46;
+  const sep = "─".repeat(WIDTH);
+
+  const box: string[] = [];
+  // Judul di dalam kotak.
+  box.push(`🎯 ANALISA BANDAR — ${sym}`);
+  box.push(`Controller • Konfirmasi • Distributor`);
+  box.push(sep);
 
   if (!c) {
-    lines.push("");
-    lines.push("<i>Butuh dua periode broker (sekarang &amp; sebelumnya) untuk analisa ini.</i>");
-    return lines.join("\n");
+    const wrapped = wrapText(
+      "Butuh dua periode broker (sekarang & sebelumnya) untuk analisa ini.",
+      WIDTH,
+    );
+    for (const w of wrapped) box.push(w);
+  } else {
+    const renderBucket = (
+      title: string,
+      icon: string,
+      entries: ConsistencyEntry[],
+      limit = 3,
+    ) => {
+      box.push(`${icon} ${title}`);
+      if (entries.length === 0) {
+        box.push("   — tidak ada");
+        return;
+      }
+      // Dedup berdasarkan code (broker yang sama bisa muncul di beberapa bucket sumber).
+      const seen = new Set<string>();
+      const unique = entries.filter((e) => {
+        if (seen.has(e.code)) return false;
+        seen.add(e.code);
+        return true;
+      });
+      unique.slice(0, limit).forEach((e, i) => {
+        const w = e.weeklyValue ? fmtIDRShort(e.weeklyValue) : "—";
+        const d = e.dailyValue ? fmtIDRShort(e.dailyValue) : "—";
+        // Nama broker tampil LENGKAP (tidak dipotong).
+        const nameLine = `${i + 1}. ${e.code} ${e.info.name}`;
+        const wrappedName = wrapText(nameLine, WIDTH, "   ");
+        for (const w2 of wrappedName) box.push(w2);
+        box.push(`   Mingguan: ${w} | Hari ini: ${d}`);
+      });
+    };
+
+    renderBucket("CONTROLLER (Akumulator)", "🟢", c.topAccumulators, 3);
+    box.push(sep);
+    renderBucket("KONFIRMASI (Baru Akumulasi)", "🔵", c.newOrFlipAkum, 2);
+    box.push(sep);
+
+    // Distributor: prioritaskan flip warning dulu (lebih bahaya), lalu konsisten.
+    const distributors: ConsistencyEntry[] = [
+      ...c.flipWarning,
+      ...c.konsistenDist,
+      ...c.newOrFreshDist,
+    ];
+    renderBucket("DISTRIBUTOR (Penekan Jual)", "🔴", distributors, 2);
+    box.push(sep);
+
+    // Pendekkan kesimpulan ke ~220 char
+    const concl =
+      c.conclusion.length > 220
+        ? c.conclusion.slice(0, 217).trimEnd() + "…"
+        : c.conclusion;
+    box.push("📝 Kesimpulan:");
+    const wrapped = wrapText(concl, WIDTH);
+    for (const w of wrapped) box.push(w);
   }
 
-  const renderBucket = (
-    title: string,
-    icon: string,
-    entries: ConsistencyEntry[],
-    limit = 3,
-  ) => {
-    lines.push("");
-    lines.push(`${icon} <b>${escapeHtml(title)}</b>`);
-    if (entries.length === 0) {
-      lines.push("<i>— tidak ada</i>");
-      return;
-    }
-    // Dedup berdasarkan code (broker yang sama bisa muncul di beberapa bucket sumber).
-    const seen = new Set<string>();
-    const unique = entries.filter((e) => {
-      if (seen.has(e.code)) return false;
-      seen.add(e.code);
-      return true;
-    });
-    unique.slice(0, limit).forEach((e, i) => {
-      const w = e.weeklyValue ? fmtIDRShort(e.weeklyValue) : "—";
-      const d = e.dailyValue ? fmtIDRShort(e.dailyValue) : "—";
-      // Format jelas: "Mingguan" vs "Hari ini" supaya tidak ambigu.
-      // Nama broker tampil LENGKAP (tidak dipotong) sesuai permintaan user.
-      lines.push(
-        `${i + 1}. <b>${escapeHtml(e.code)}</b> ${escapeHtml(e.info.name)}`,
-      );
-      lines.push(
-        `   <code>Mingguan: ${escapeHtml(w)} | Hari ini: ${escapeHtml(d)}</code>`,
-      );
-    });
-  };
-
-  renderBucket("CONTROLLER (Akumulator)", "🟢", c.topAccumulators, 3);
-  // Khusus user request: Konfirmasi & Distributor cukup top 2.
-  renderBucket("KONFIRMASI (Baru Akumulasi)", "🔵", c.newOrFlipAkum, 2);
-
-  // Distributor: prioritaskan flip warning dulu (lebih bahaya), lalu konsisten.
-  const distributors: ConsistencyEntry[] = [
-    ...c.flipWarning,
-    ...c.konsistenDist,
-    ...c.newOrFreshDist,
-  ];
-  renderBucket("DISTRIBUTOR (Penekan Jual)", "🔴", distributors, 2);
-
-  lines.push("");
-  // Pendekkan kesimpulan ke ~220 char
-  const concl = c.conclusion.length > 220
-    ? c.conclusion.slice(0, 217).trimEnd() + "…"
-    : c.conclusion;
-  lines.push(`<b>📝 Kesimpulan:</b> <i>${escapeHtml(concl)}</i>`);
-
+  // Bungkus dalam <pre> agar muncul sebagai kotak copyable.
+  const lines: string[] = [];
+  lines.push("<pre>");
+  for (const b of box) lines.push(escapeHtml(b));
+  lines.push("</pre>");
   return lines.join("\n").trimEnd();
 }
 
-// Susun keseluruhan pesan: header + ringkasan + tabel + analisa bandar.
+// Susun keseluruhan pesan: ringkasan (sudah memuat header) + tabel + analisa.
+// Section dipisah dengan baris kosong saja (tanpa garis ——— pemisah lagi).
 export function buildAnalysisMessage(args: {
   symbol: string;
   merged: MergedTable | null;
@@ -465,15 +506,18 @@ export function buildAnalysisMessage(args: {
     minute: "2-digit",
   });
 
+  // Header info (dulu di luar kotak) sekarang dipasang di dalam kotak RINGKASAN.
+  const headerInfo = {
+    title: `📈 AUTO MERGE SAHAM`,
+    subtitle: `${sym} • ${now}`,
+  };
+
   const sections: string[] = [];
 
-  // Header utama
+  // 1. Ringkasan & Analisa Bandar (memuat header utama di dalam kotaknya).
   sections.push(
-    `<b>📈 AUTO MERGE SAHAM</b>\n<b>${escapeHtml(sym)}</b> • <i>${escapeHtml(now)}</i>`,
+    formatBrokerSummary(args.merged, args.brokerAnalysis, sym, headerInfo),
   );
-
-  // 1. Ringkasan & Analisa Bandar
-  sections.push(formatBrokerSummary(args.merged, args.brokerAnalysis, sym));
 
   // 2. Hasil Gabungan Data
   if (args.merged) {
@@ -483,5 +527,6 @@ export function buildAnalysisMessage(args: {
   // 3. Analisa Bandar — Controller, Konfirmasi, Distributor
   sections.push(formatBrokerConsistency(args.brokerConsistency, sym));
 
-  return sections.join("\n\n———\n\n");
+  // Pisahkan section dengan baris kosong saja, tanpa garis ——— pemisah.
+  return sections.join("\n\n");
 }
